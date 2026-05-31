@@ -1,0 +1,269 @@
+{
+  "title": "Star Wars Explorer — Canary Monitoring",
+  "description": "Comparação canary vs stable: taxa de erros, latência de tela, sessões por versão e renders lentos.",
+  "layout_type": "ordered",
+  "reflow_type": "fixed",
+  "tags": ["team:frontend"],
+  "template_variables": [
+    {
+      "name": "deploy_type",
+      "prefix": "@deploy_type",
+      "available_values": ["canary", "stable"],
+      "default": "*"
+    },
+    {
+      "name": "app_version",
+      "prefix": "@app_version",
+      "available_values": [],
+      "default": "*"
+    }
+  ],
+  "widgets": [
+    {
+      "id": 1,
+      "definition": {
+        "type": "timeseries",
+        "title": "Taxa de Erros por Sessão — Canary vs Stable",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": ["avg", "sum", "value"],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "display_type": "bars",
+            "queries": [
+              {
+                "name": "errors",
+                "data_source": "logs",
+                "indexes": ["*"],
+                "compute": { "aggregation": "count" },
+                "group_by": [
+                  {
+                    "facet": "@deploy_type",
+                    "limit": 5,
+                    "sort": { "aggregation": "count", "order": "desc" }
+                  }
+                ],
+                "search": {
+                  "query": "source:browser @event_type:(js_error OR request_error)"
+                },
+                "storage": "hot"
+              },
+              {
+                "name": "total",
+                "data_source": "logs",
+                "indexes": ["*"],
+                "compute": { "aggregation": "count" },
+                "group_by": [
+                  {
+                    "facet": "@deploy_type",
+                    "limit": 5,
+                    "sort": { "aggregation": "count", "order": "desc" }
+                  }
+                ],
+                "search": {
+                  "query": "source:browser @event_type:(render_complete OR latency OR request_error OR js_error)"
+                },
+                "storage": "hot"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "(errors / total) * 100",
+                "alias": "Taxa de Erros (%)"
+              }
+            ],
+            "style": {
+              "palette": "warm",
+              "line_type": "solid",
+              "line_width": "normal"
+            }
+          }
+        ],
+        "yaxis": {
+          "include_zero": true,
+          "label": "% de eventos com erro"
+        },
+        "markers": [
+          {
+            "value": "y = 5",
+            "display_type": "warning dashed",
+            "label": "SLO 5%"
+          }
+        ]
+      },
+      "layout": { "x": 0, "y": 0, "width": 6, "height": 3 }
+    },
+    {
+      "id": 2,
+      "definition": {
+        "type": "toplist",
+        "title": "Top Telas Mais Lentas — p95 de Duração (ms)",
+        "title_size": "16",
+        "title_align": "left",
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "name": "query1",
+                "data_source": "logs",
+                "indexes": ["*"],
+                "compute": {
+                  "aggregation": "pc95",
+                  "metric": "@duration_ms"
+                },
+                "group_by": [
+                  {
+                    "facet": "@view_name",
+                    "limit": 10,
+                    "sort": {
+                      "aggregation": "pc95",
+                      "metric": "@duration_ms",
+                      "order": "desc"
+                    }
+                  }
+                ],
+                "search": {
+                  "query": "source:browser @event_type:(render_complete OR latency)"
+                },
+                "storage": "hot"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "query1",
+                "alias": "p95 duration_ms"
+              }
+            ],
+            "sort": {
+              "count": 10,
+              "order_by": [
+                { "type": "formula", "index": 0, "order": "desc" }
+              ]
+            }
+          }
+        ],
+        "style": {
+          "display": { "type": "stacked", "legend": "automatic" },
+          "palette": "dog_classic",
+          "scaling": "relative"
+        }
+      },
+      "layout": { "x": 6, "y": 0, "width": 6, "height": 3 }
+    },
+    {
+      "id": 3,
+      "definition": {
+        "type": "toplist",
+        "title": "Sessões por Versão (app_version)",
+        "title_size": "16",
+        "title_align": "left",
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "name": "query1",
+                "data_source": "logs",
+                "indexes": ["*"],
+                "compute": {
+                  "aggregation": "cardinality",
+                  "metric": "@session_id"
+                },
+                "group_by": [
+                  {
+                    "facet": "@app_version",
+                    "limit": 20,
+                    "sort": {
+                      "aggregation": "cardinality",
+                      "metric": "@session_id",
+                      "order": "desc"
+                    }
+                  }
+                ],
+                "search": {
+                  "query": "source:browser"
+                },
+                "storage": "hot"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "query1",
+                "alias": "Sessões únicas"
+              }
+            ],
+            "sort": {
+              "count": 20,
+              "order_by": [
+                { "type": "formula", "index": 0, "order": "desc" }
+              ]
+            }
+          }
+        ],
+        "style": {
+          "display": { "type": "stacked", "legend": "automatic" },
+          "palette": "cool",
+          "scaling": "relative"
+        }
+      },
+      "layout": { "x": 0, "y": 3, "width": 6, "height": 3 }
+    },
+    {
+      "id": 4,
+      "definition": {
+        "type": "timeseries",
+        "title": "Renders Acima de 5s por Versão (threshold_exceeded)",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": ["sum", "value"],
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "display_type": "bars",
+            "queries": [
+              {
+                "name": "query1",
+                "data_source": "logs",
+                "indexes": ["*"],
+                "compute": { "aggregation": "count" },
+                "group_by": [
+                  {
+                    "facet": "@app_version",
+                    "limit": 10,
+                    "sort": { "aggregation": "count", "order": "desc" }
+                  }
+                ],
+                "search": {
+                  "query": "source:browser @event_type:latency @threshold_exceeded:true"
+                },
+                "storage": "hot"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "query1",
+                "alias": "Renders lentos (> 5s)"
+              }
+            ],
+            "style": {
+              "palette": "orange",
+              "line_type": "solid",
+              "line_width": "normal"
+            }
+          }
+        ],
+        "yaxis": {
+          "include_zero": true,
+          "label": "Ocorrências"
+        }
+      },
+      "layout": { "x": 6, "y": 3, "width": 6, "height": 3 }
+    }
+  ]
+}
