@@ -5,14 +5,11 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatButtonModule } from '@angular/material/button';
 import {
   Observable,
-  Subject,
   catchError,
   map,
-  merge,
   of,
   shareReplay,
   startWith,
-  switchMap,
 } from 'rxjs';
 import { SwapiService } from '../../core/services/swapi.service';
 import { FilmDisplayItem, toFilmDisplayItem } from '../../models/film.model';
@@ -36,8 +33,8 @@ export class FilmsComponent {
   private swapiService = inject(SwapiService);
 
   films$: Observable<FilmDisplayItem[] | null> = this.swapiService.getFilms().pipe(
-    map((page) => page.results.map(toFilmDisplayItem)),
-    catchError(() => of<FilmDisplayItem[] | null>(null)),
+    map((films) => films.map(toFilmDisplayItem)),
+    catchError((): Observable<FilmDisplayItem[] | null> => of(null)),
     shareReplay(1)
   );
 

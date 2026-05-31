@@ -6,7 +6,7 @@
     </div>
   </ng-container>
 
-  <ng-container *ngIf="error$ | async as error">
+  <ng-container *ngIf="(error$ | async) as error">
     <div *ngIf="error" class="error-container">
       <p class="error-message">Não foi possível carregar os personagens. Tente novamente.</p>
       <button mat-raised-button color="primary" (click)="retry()">Tentar novamente</button>
@@ -14,28 +14,30 @@
   </ng-container>
 
   <ng-container *ngIf="!(isLoading$ | async) && !(error$ | async)">
-    <mat-list class="characters-list">
-      <mat-list-item
-        *ngFor="let character of (pageData$ | async)?.results"
-        class="character-item">
-        <span matListItemTitle>{{ character.name }}</span>
-        <span matListItemLine>
-          Ano de nascimento: {{ character.birth_year }} &nbsp;|&nbsp;
-          Gênero: {{ character.gender }} &nbsp;|&nbsp;
-          Altura: {{ character.height }} cm &nbsp;|&nbsp;
-          Massa: {{ character.mass }} kg
-        </span>
-      </mat-list-item>
-    </mat-list>
+    <ng-container *ngIf="pageView$ | async as page">
+      <mat-list class="characters-list">
+        <mat-list-item
+          *ngFor="let character of page.items"
+          class="character-item">
+          <span matListItemTitle>{{ character.name }}</span>
+          <span matListItemLine>
+            Ano de nascimento: {{ character.birth_year }} &nbsp;|&nbsp;
+            Gênero: {{ character.gender }} &nbsp;|&nbsp;
+            Altura: {{ character.height }} cm &nbsp;|&nbsp;
+            Massa: {{ character.mass }} kg
+          </span>
+        </mat-list-item>
+      </mat-list>
 
-    <mat-paginator
-      [length]="(pageData$ | async)?.count ?? 0"
-      [pageSize]="10"
-      [hidePageSize]="true"
-      [showFirstLastButtons]="true"
-      (page)="onPageChange($event)"
-      aria-label="Selecionar página de personagens">
-    </mat-paginator>
+      <mat-paginator
+        [length]="page.total"
+        [pageSize]="pageSize"
+        [hidePageSize]="true"
+        [showFirstLastButtons]="true"
+        (page)="onPageChange($event)"
+        aria-label="Selecionar página de personagens">
+      </mat-paginator>
+    </ng-container>
   </ng-container>
 
 </div>

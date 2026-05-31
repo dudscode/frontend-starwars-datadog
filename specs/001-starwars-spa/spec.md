@@ -110,6 +110,12 @@ A user can switch between the Characters screen and the Films screen at any time
 - Clicking a character or film entry does not navigate to a detail page; the application is listing-only.
 - The application targets modern web browsers only; no server-side rendering or native mobile app is in scope.
 - All UI copy (navigation labels, error messages) is in Portuguese, consistent with the language of the original requirement.
-- The Star Wars data source is the publicly available SWAPI REST API (`swapi.dev`); no self-hosted or proprietary API is involved.
-- Films are a small, static dataset (~6 total) and can be cached in memory after the first load without pagination.
-- Characters are a larger dataset (~82 total) paginated at 10 per page by the data source; the application follows this server-side pagination rather than loading all characters at once.
+- The Star Wars data source is `https://swapi.info/api` (the swapi.info public instance). This API returns **flat arrays** — `GET /people` returns all 82 characters at once; `GET /films` returns all 6 films at once. There is no server-side pagination wrapper (`count`/`next`/`previous`/`results`).
+- Films are a small, static dataset (6 total) returned in a single response; cached in memory after the first load.
+- Characters are returned as a flat array of 82 items in a single response. Pagination (10 per page) is implemented **client-side** by slicing the array — the API is called once and the full dataset is cached.
+
+## Clarifications
+
+### Session 2026-05-30
+
+- Q: What is the correct SWAPI endpoint and response shape? → A: Use `https://swapi.info/api`. The API returns flat arrays (`Character[]`, `Film[]`), NOT paginated wrappers `{count, next, previous, results}`. Pagination for characters is client-side.

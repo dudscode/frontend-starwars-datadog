@@ -2,22 +2,14 @@ import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testin
 import { of, Subject, throwError } from 'rxjs';
 import { FilmsComponent } from './films.component';
 import { SwapiService } from '../../core/services/swapi.service';
-import { SwapiPage } from '../../models/swapi-page.model';
 import { Film } from '../../models/film.model';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
 const mockFilms: Film[] = [
-  { episode_id: 4, title: 'A New Hope', director: 'George Lucas', producer: 'Gary Kurtz', release_date: '1977-05-25', opening_crawl: '...', characters: [], url: 'https://swapi.dev/api/films/1/' },
-  { episode_id: 5, title: 'The Empire Strikes Back', director: 'Irvin Kershner', producer: 'Gary Kurtz', release_date: '1980-05-17', opening_crawl: '...', characters: [], url: 'https://swapi.dev/api/films/2/' },
-  { episode_id: 6, title: 'Return of the Jedi', director: 'Richard Marquand', producer: 'Howard Kazanjian', release_date: '1983-05-25', opening_crawl: '...', characters: [], url: 'https://swapi.dev/api/films/3/' },
+  { episode_id: 4, title: 'A New Hope', director: 'George Lucas', producer: 'Gary Kurtz', release_date: '1977-05-25', opening_crawl: '...', characters: [], url: 'https://swapi.info/api/films/1' },
+  { episode_id: 5, title: 'The Empire Strikes Back', director: 'Irvin Kershner', producer: 'Gary Kurtz', release_date: '1980-05-17', opening_crawl: '...', characters: [], url: 'https://swapi.info/api/films/2' },
+  { episode_id: 6, title: 'Return of the Jedi', director: 'Richard Marquand', producer: 'Howard Kazanjian', release_date: '1983-05-25', opening_crawl: '...', characters: [], url: 'https://swapi.info/api/films/3' },
 ];
-
-const mockPage: SwapiPage<Film> = {
-  count: 3,
-  next: null,
-  previous: null,
-  results: mockFilms,
-};
 
 describe('FilmsComponent', () => {
   let component: FilmsComponent;
@@ -26,7 +18,7 @@ describe('FilmsComponent', () => {
 
   beforeEach(async () => {
     swapiServiceMock = {
-      getFilms: jest.fn().mockReturnValue(of(mockPage)),
+      getFilms: jest.fn().mockReturnValue(of(mockFilms)),
     };
 
     await TestBed.configureTestingModule({
@@ -51,9 +43,8 @@ describe('FilmsComponent', () => {
   }));
 
   it('should show a loading spinner before data arrives', fakeAsync(() => {
-    const subject = new Subject<SwapiPage<Film>>();
+    const subject = new Subject<Film[]>();
     swapiServiceMock.getFilms.mockReturnValue(subject.asObservable());
-    // Re-create component so it binds to the new Subject mock
     fixture = TestBed.createComponent(FilmsComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -66,7 +57,6 @@ describe('FilmsComponent', () => {
     swapiServiceMock.getFilms.mockReturnValue(
       throwError(() => new Error('Failed to load films'))
     );
-    // Re-create component with error mock
     fixture = TestBed.createComponent(FilmsComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();

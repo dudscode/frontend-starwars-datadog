@@ -1,28 +1,20 @@
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { CharactersComponent } from './characters.component';
 import { SwapiService } from '../../core/services/swapi.service';
-import { SwapiPage } from '../../models/swapi-page.model';
 import { Character } from '../../models/character.model';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
-const mockCharacters: Character[] = Array.from({ length: 10 }, (_, i) => ({
+const mockCharacters: Character[] = Array.from({ length: 25 }, (_, i) => ({
   name: `Character ${i + 1}`,
   birth_year: '19BBY',
   gender: 'male',
   height: '172',
   mass: '77',
-  homeworld: 'https://swapi.dev/api/planets/1/',
+  homeworld: 'https://swapi.info/api/planets/1',
   films: [],
-  url: `https://swapi.dev/api/people/${i + 1}/`,
+  url: `https://swapi.info/api/people/${i + 1}`,
 }));
-
-const mockPage: SwapiPage<Character> = {
-  count: 82,
-  next: 'https://swapi.dev/api/people/?page=2',
-  previous: null,
-  results: mockCharacters,
-};
 
 describe('CharactersComponent', () => {
   let component: CharactersComponent;
@@ -31,7 +23,7 @@ describe('CharactersComponent', () => {
 
   beforeEach(async () => {
     swapiServiceMock = {
-      getCharacters: jest.fn().mockReturnValue(of(mockPage)),
+      getCharacters: jest.fn().mockReturnValue(of(mockCharacters)),
     };
 
     await TestBed.configureTestingModule({
@@ -47,7 +39,7 @@ describe('CharactersComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should display 10 character list items after data loads', fakeAsync(() => {
+  it('should display 10 character list items on the first page', fakeAsync(() => {
     fixture.detectChanges();
     tick();
     fixture.detectChanges();
@@ -55,7 +47,7 @@ describe('CharactersComponent', () => {
     expect(items.length).toBe(10);
   }));
 
-  it('should show a paginator with the total count', fakeAsync(() => {
+  it('should show a paginator with the total character count', fakeAsync(() => {
     fixture.detectChanges();
     tick();
     fixture.detectChanges();
@@ -63,20 +55,30 @@ describe('CharactersComponent', () => {
     expect(paginator).toBeTruthy();
   }));
 
-  it('should fetch a new page when onPageChange is called', fakeAsync(() => {
+  it('should show a loading spinner before data arrives', fakeAsync(() => {
+    const subject = new Subject<Character[]>();
+    swapiServiceMock.getCharacters.mockReturnValue(subject.asObservable());
+    fixture = TestBed.createComponent(CharactersComponent);
+    component = fixture.componentInstance;
     fixture.detectChanges();
-    tick();
-    const pageEvent = { pageIndex: 2, pageSize: 10, length: 82 } as any;
-    component.onPageChange(pageEvent);
-    tick();
-    fixture.detectChanges();
-    expect(swapiServiceMock.getCharacters).toHaveBeenCalledWith(3);
+    const spinner = fixture.nativeElement.querySelector('mat-spinner');
+    expect(spinner).toBeTruthy();
+    subject.complete();
   }));
+
+  it('should update the current page signal on page change', () => {
+    fixture.detectChanges();
+    const pageEvent = { pageIndex: 1, pageSize: 10, length: 25 } as any;
+    component.onPageChange(pageEvent);
+    expect(component.currentPage()).toBe(1);
+  });
 
   it('should display Portuguese error message on HTTP failure', fakeAsync(() => {
     swapiServiceMock.getCharacters.mockReturnValue(
       throwError(() => new Error('Failed to load characters'))
     );
+    fixture = TestBed.createComponent(CharactersComponent);
+    component = fixture.componentInstance;
     fixture.detectChanges();
     tick();
     fixture.detectChanges();
@@ -85,9 +87,9 @@ describe('CharactersComponent', () => {
     expect(errorEl.textContent).toContain('Não foi possível carregar os personagens');
   }));
 
-  it('should restore the current page signal to trigger re-fetch on retry', () => {
-    component.currentPage.set(3);
+  it('should restore the current page signal on retry', () => {
+    component.currentPage.set(2);
     component.retry();
-    expect(component.currentPage()).toBe(3);
+    expect(component.currentPage()).toBe(2);
   });
 });
