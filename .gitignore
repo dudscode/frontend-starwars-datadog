@@ -1,0 +1,32 @@
+# Claude Code local settings
+.claude/settings.local.json
+
+# Angular build output
+dist/
+.angular/
+tmp/
+
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+.env.local
+*.local.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage reports
+coverage/
+
+# Playwright test results
+test-results/
+playwright-report/

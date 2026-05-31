@@ -246,7 +246,11 @@ With multiple developers:
 - [P] tasks = different files, no dependencies
 - [Story] label maps task to specific user story for traceability
 - Each user story should be independently completable and testable
-- Verify tests fail before implementing
-- Commit after each task or logical group
+- Verify tests fail before implementing (Red-Green-Refactor — tests MUST fail first)
+- **Commit after EACH task** (Principle II) — not at story end; include task ID in commit message
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
+- **Unit tests**: JEST exclusively — no Karma, Jasmine, or other frameworks; coverage MUST reach 100% (Principle IV)
+- **E2E tests**: MCP Playwright exclusively — no Cypress or Protractor (Principle IV)
+- **Build gate**: Run `ng build` and `ng serve` before opening PR; implementation is not done until both pass (Principle III)
+- **README**: Include a README update task in the final phase of every feature (Principle V)

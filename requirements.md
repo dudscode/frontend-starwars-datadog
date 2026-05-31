@@ -1,0 +1,1 @@
+Crie uma aplicação com angular 17, standalone, usando rotas  e tenha uma duas telas, uma de listar os personagens e outra de listar os filmes, usando a api publica do starwars, use o angular material, deve seguir as boas particas do core web vitals

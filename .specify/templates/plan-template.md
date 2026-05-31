@@ -40,7 +40,11 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+- [ ] **Principle I — Semantic Version Control**: Feature branch name follows `<type>/<short-description>` pattern; no direct commits to `main` planned.
+- [ ] **Principle II — Continuous Commit Discipline**: Tasks are granular enough that each can be committed independently; task IDs will be referenced in commit messages.
+- [ ] **Principle III — Build & Runtime Verification Gate**: Plan includes a final verification step running `ng build` and `ng serve` before the PR is opened.
+- [ ] **Principle IV — Test Coverage Mandate**: Unit tests use JEST exclusively with 100% coverage target; E2E tests use MCP Playwright for all primary user journeys.
+- [ ] **Principle V — Living Documentation**: README update task is included in the final phase of implementation.
 
 ## Project Structure
 
