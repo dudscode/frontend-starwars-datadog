@@ -21,6 +21,7 @@ const config: Config = {
     '!src/app/app.routes.ts',
     '!src/app/app.config.ts',
     '!src/setup-jest.ts',
+    '!src/app/core/testing/**',
   ],
   coverageThreshold: {
     global: {

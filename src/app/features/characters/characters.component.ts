@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  OnInit,
   inject,
   signal,
 } from '@angular/core';
@@ -21,6 +22,7 @@ import {
   startWith,
 } from 'rxjs';
 import { SwapiService } from '../../core/services/swapi.service';
+import { ObservabilityService } from '../../core/services/observability.service';
 import { CharacterDisplayItem, toCharacterDisplayItem } from '../../models/character.model';
 
 export interface CharactersPageView {
@@ -46,7 +48,9 @@ const PAGE_SIZE = 10;
   templateUrl: './characters.component.html',
   styleUrl: './characters.component.scss',
 })
-export class CharactersComponent {
+export class CharactersComponent implements OnInit {
+  private readonly viewStart = performance.now();
+  private obs = inject(ObservabilityService);
   private swapiService = inject(SwapiService);
 
   readonly pageSize = PAGE_SIZE;
@@ -81,6 +85,10 @@ export class CharactersComponent {
     catchError((err: Error) => of<string | null>(err.message)),
     startWith<string | null>(null)
   );
+
+  ngOnInit(): void {
+    this.obs.watchView('characters', this.pageView$);
+  }
 
   onPageChange(event: PageEvent): void {
     this.currentPage.set(event.pageIndex);

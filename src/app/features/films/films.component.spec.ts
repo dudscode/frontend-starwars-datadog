@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testin
 import { of, Subject, throwError } from 'rxjs';
 import { FilmsComponent } from './films.component';
 import { SwapiService } from '../../core/services/swapi.service';
+import { ObservabilityService } from '../../core/services/observability.service';
 import { Film } from '../../models/film.model';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
@@ -10,6 +11,8 @@ const mockFilms: Film[] = [
   { episode_id: 5, title: 'The Empire Strikes Back', director: 'Irvin Kershner', producer: 'Gary Kurtz', release_date: '1980-05-17', opening_crawl: '...', characters: [], url: 'https://swapi.info/api/films/2' },
   { episode_id: 6, title: 'Return of the Jedi', director: 'Richard Marquand', producer: 'Howard Kazanjian', release_date: '1983-05-25', opening_crawl: '...', characters: [], url: 'https://swapi.info/api/films/3' },
 ];
+
+const obsMock = { watchView: jest.fn() };
 
 describe('FilmsComponent', () => {
   let component: FilmsComponent;
@@ -23,12 +26,17 @@ describe('FilmsComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [FilmsComponent, NoopAnimationsModule],
-      providers: [{ provide: SwapiService, useValue: swapiServiceMock }],
+      providers: [
+        { provide: SwapiService, useValue: swapiServiceMock },
+        { provide: ObservabilityService, useValue: obsMock },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(FilmsComponent);
     component = fixture.componentInstance;
   });
+
+  beforeEach(() => { obsMock.watchView.mockClear(); });
 
   it('should create', () => {
     expect(component).toBeTruthy();
@@ -87,5 +95,16 @@ describe('FilmsComponent', () => {
     });
     component.retry();
     expect(reloadMock).toHaveBeenCalledTimes(1);
+  });
+
+  describe('ObservabilityService integration', () => {
+    it('should call watchView with "films" and films$ in ngOnInit', () => {
+      fixture.detectChanges();
+      expect(obsMock.watchView).toHaveBeenCalledWith('films', component.films$);
+    });
+
+    it('should implement OnInit interface', () => {
+      expect(typeof component.ngOnInit).toBe('function');
+    });
   });
 });

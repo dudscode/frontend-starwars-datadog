@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testin
 import { of, Subject, throwError } from 'rxjs';
 import { CharactersComponent } from './characters.component';
 import { SwapiService } from '../../core/services/swapi.service';
+import { ObservabilityService } from '../../core/services/observability.service';
 import { Character } from '../../models/character.model';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
@@ -16,6 +17,8 @@ const mockCharacters: Character[] = Array.from({ length: 25 }, (_, i) => ({
   url: `https://swapi.info/api/people/${i + 1}`,
 }));
 
+const obsMock = { watchView: jest.fn() };
+
 describe('CharactersComponent', () => {
   let component: CharactersComponent;
   let fixture: ComponentFixture<CharactersComponent>;
@@ -28,12 +31,17 @@ describe('CharactersComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [CharactersComponent, NoopAnimationsModule],
-      providers: [{ provide: SwapiService, useValue: swapiServiceMock }],
+      providers: [
+        { provide: SwapiService, useValue: swapiServiceMock },
+        { provide: ObservabilityService, useValue: obsMock },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(CharactersComponent);
     component = fixture.componentInstance;
   });
+
+  beforeEach(() => { obsMock.watchView.mockClear(); });
 
   it('should create', () => {
     expect(component).toBeTruthy();
@@ -91,5 +99,16 @@ describe('CharactersComponent', () => {
     component.currentPage.set(2);
     component.retry();
     expect(component.currentPage()).toBe(2);
+  });
+
+  describe('ObservabilityService integration', () => {
+    it('should call watchView with "characters" and pageView$ in ngOnInit', () => {
+      fixture.detectChanges();
+      expect(obsMock.watchView).toHaveBeenCalledWith('characters', component.pageView$);
+    });
+
+    it('should implement OnInit interface', () => {
+      expect(typeof component.ngOnInit).toBe('function');
+    });
   });
 });

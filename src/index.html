@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <title>StarwarsExplorer</title>
@@ -8,8 +9,41 @@
   <link rel="icon" type="image/x-icon" href="favicon.ico">
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <script src="https://www.datadoghq-browser-agent.com/us1/v7/datadog-rum.js" type="text/javascript" crossorigin>
+  </script>
+  <script>
+    window.DD_RUM && window.DD_RUM.init({
+      applicationId: '4ed181bf-1309-4c85-b883-e1bc4dee455b',
+      clientToken: 'pub1337f5d9db19e0d47276bdf026d22c88',
+      site: 'datadoghq.com',
+      service: 'starwars-explorer',
+      env: 'dev',				// e.g. 'prod', 'staging-1', 'dev'
+      version: '1.0.0',	// e.g. '1.0.0'
+      sessionSampleRate: 5,			// capture 100% of sessions
+      sessionReplaySampleRate: 20,	// capture 20% of sessions with replay
+      trackResources: true,			// Enable Resource tracking
+      trackUserInteractions: true,	// Enable Action tracking
+      trackLongTasks: true,			// Enable Long Tasks tracking
+
+      // ----- Recommended Options -----
+      // allowedTracingUrls: '<BACKEND_URL>',		// Enable distributed tracing
+      // defaultPrivacyLevel: 'mask-user-input',	// 'mask-user-input' | 'allow' | 'mask'
+    });
+  </script>
+  <script type="text/javascript" src="https://www.datadoghq-browser-agent.com/us1/v7/datadog-logs.js" crossorigin></script>
+        <script>
+            window.DD_LOGS && window.DD_LOGS.init({
+                clientToken: 'pub228023c2263f9a2f3fd30e33b5b042a3',
+                site: 'datadoghq.com',
+                forwardErrorsToLogs: true,
+                sessionSampleRate: 100
+                ,service: 'starwars-explorer',
+            });
+        </script>
 </head>
+
 <body class="mat-typography">
   <app-root></app-root>
 </body>
+
 </html>

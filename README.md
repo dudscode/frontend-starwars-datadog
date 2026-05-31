@@ -90,19 +90,63 @@ export const environment = {
 
 Verificar com Lighthouse: DevTools → Lighthouse → Mobile → Analyze page load em `http://localhost:4200`.
 
+## Observabilidade (Datadog Logs)
+
+A aplicação captura automaticamente eventos estruturados via `window.DD_LOGS` (Datadog Logs SDK, inicializado externamente pelo infrastructure team):
+
+| Evento | Trigger | Campos |
+|--------|---------|--------|
+| `render_complete` | Tela carregada ≤ 5 s | `view_name`, `duration_ms`, `threshold_exceeded: false` |
+| `latency` | Tela carregada > 5 s | `view_name`, `duration_ms`, `threshold_exceeded: true` |
+| `request_error` | Falha HTTP | `http_status`, `endpoint`, `error_message` |
+| `js_error` | Erro Angular / promise rejeitada | `error_message` |
+
+Todos os eventos carregam automaticamente `app_version` e `deploy_type` (contexto global — configurado pelo CI).
+
+### Testar localmente com mock
+
+```javascript
+// Cole no console do browser antes de navegar:
+window.DD_LOGS = {
+  setGlobalContextProperty: (k, v) => console.log('[DD] global:', k, v),
+  logger: { log: (msg, ctx, lvl) => console.log(`[DD][${lvl}] ${msg}`, ctx) }
+};
+```
+
+### Variáveis de CI
+
+| Variável | Exemplo | Descrição |
+|----------|---------|-----------|
+| `APP_VERSION` | `abc1234` | SHA do commit deployado |
+| `DEPLOY_TYPE` | `canary` ou `stable` | Slot do deploy |
+
+```bash
+ng build \
+  --define "__APP_VERSION__=\"${APP_VERSION}\"" \
+  --define "__DEPLOY_TYPE__=\"${DEPLOY_TYPE}\""
+```
+
 ## Arquitetura
 
 ```
 src/app/
 ├── app.component.ts          # Shell — toolbar + router-outlet
 ├── app.routes.ts             # Rotas lazy-loaded
-├── app.config.ts             # Providers (router, http, animations)
+├── app.config.ts             # Providers (router, http, animations, observability)
 ├── features/
 │   ├── characters/           # Tela de personagens
 │   └── films/                # Tela de filmes
-├── core/services/
-│   └── swapi.service.ts      # Único ponto de acesso à API
-└── models/                   # Interfaces TypeScript (Character, Film, SwapiPage)
+├── core/
+│   ├── services/
+│   │   ├── swapi.service.ts          # Único ponto de acesso à API
+│   │   └── observability.service.ts  # Facade DD_LOGS — watchView, log
+│   ├── interceptors/
+│   │   └── dd-logs.interceptor.ts    # Captura erros HTTP
+│   ├── handlers/
+│   │   └── global-error.handler.ts   # Captura erros JS / promises
+│   └── types/
+│       └── dd-logs.types.ts          # LogPayload, EventType, Severity
+└── models/                   # Interfaces TypeScript (Character, Film, SwapiList)
 ```
 
 ## Tecnologias
