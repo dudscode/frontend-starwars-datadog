@@ -1,56 +1,36 @@
 # Data Model: Star Wars Explorer
 
 **Phase 1 output for**: `specs/001-starwars-spa/plan.md`
-**Date**: 2026-05-30
+**Date**: 2026-05-30 (revised after swapi.info clarification)
 
-All entities are read-only TypeScript interfaces (not classes). Data flows from the SWAPI REST API through typed service responses to view-layer projection objects rendered in templates.
-
----
-
-## Entity: `SwapiPage<T>`
-
-Generic pagination envelope returned by every SWAPI list endpoint.
-
-```typescript
-interface SwapiPage<T> {
-  count: number;       // total records across all pages
-  next: string | null; // URL of next page, or null
-  previous: string | null; // URL of previous page, or null
-  results: T[];        // items for the current page
-}
-```
-
-**Validation rules**:
-- `count` is always a positive integer from the API.
-- `next` / `previous` are `null` on boundary pages — components must handle both states for paginator rendering.
-- `results` length is always ≤ 10 for `/people/` and ≤ 6 for `/films/`.
+All entities are read-only TypeScript interfaces (not classes). Data flows from `swapi.info` REST API as flat arrays → cached in service → projected to display-only view objects → rendered in templates.
 
 ---
 
 ## Entity: `Character`
 
-Raw API response shape from `GET /people/?page={n}`. Not rendered directly — projected to `CharacterDisplayItem` first.
+Raw API response shape for one item in `GET https://swapi.info/api/people` response array.
 
 ```typescript
 interface Character {
   name: string;
-  birth_year: string; // e.g. "19BBY", "unknown"
-  gender: string;     // e.g. "male", "female", "n/a", "unknown"
-  height: string;     // cm as string, e.g. "172" or "unknown"
-  mass: string;       // kg as string, e.g. "77" or "unknown"
-  homeworld: string;  // URL reference — not displayed
-  films: string[];    // array of film URL references — not displayed
-  url: string;        // self-reference URL — not displayed
+  birth_year: string;   // e.g. "19BBY", "unknown"
+  gender: string;       // e.g. "male", "female", "n/a", "unknown"
+  height: string;       // cm as string, e.g. "172" or "unknown"
+  mass: string;         // kg as string, e.g. "77" or "unknown"
+  homeworld: string;    // URL reference — not displayed
+  films: string[];      // array of film URL references — not displayed
+  url: string;          // e.g. "https://swapi.info/api/people/1"
 }
 ```
 
-**Notes**: SWAPI returns numeric values (height, mass) as strings. Display them as-is; no unit conversion needed.
+**Notes**: SWAPI returns numeric values (height, mass) as strings. Displayed as-is.
 
 ---
 
 ## Entity: `CharacterDisplayItem`
 
-View-layer projection of `Character`. Contains only the five fields rendered in the list template. Produced by the pure function `toCharacterDisplayItem`.
+View-layer projection of `Character`. Contains only the five fields rendered in the list template.
 
 ```typescript
 interface CharacterDisplayItem {
@@ -62,23 +42,15 @@ interface CharacterDisplayItem {
 }
 
 function toCharacterDisplayItem(c: Character): CharacterDisplayItem {
-  return {
-    name: c.name,
-    birth_year: c.birth_year,
-    gender: c.gender,
-    height: c.height,
-    mass: c.mass,
-  };
+  return { name: c.name, birth_year: c.birth_year, gender: c.gender, height: c.height, mass: c.mass };
 }
 ```
-
-**Why a projection?** Decouples the template from the full `Character` shape. If SWAPI adds or renames fields, only the interface and mapping function change — not the template.
 
 ---
 
 ## Entity: `Film`
 
-Raw API response shape from `GET /films/`. Not rendered directly — projected to `FilmDisplayItem`.
+Raw API response shape for one item in `GET https://swapi.info/api/films` response array.
 
 ```typescript
 interface Film {
@@ -86,10 +58,10 @@ interface Film {
   title: string;
   director: string;
   producer: string;       // not displayed
-  release_date: string;   // ISO 8601 date string, e.g. "1977-05-25"
-  opening_crawl: string;  // not displayed (long text)
-  characters: string[];   // array of character URL references — not displayed
-  url: string;            // self-reference URL — not displayed
+  release_date: string;   // ISO 8601, e.g. "1977-05-25"
+  opening_crawl: string;  // not displayed
+  characters: string[];   // URL references — not displayed
+  url: string;            // e.g. "https://swapi.info/api/films/1"
 }
 ```
 
@@ -108,13 +80,32 @@ interface FilmDisplayItem {
 }
 
 function toFilmDisplayItem(f: Film): FilmDisplayItem {
-  return {
-    episode_id: f.episode_id,
-    title: f.title,
-    director: f.director,
-    release_date: f.release_date,
-  };
+  return { episode_id: f.episode_id, title: f.title, director: f.director, release_date: f.release_date };
 }
+```
+
+---
+
+## Entity: `CharactersPageView`
+
+Computed view model for client-side pagination. Produced by `CharactersComponent` from the cached `Character[]` array.
+
+```typescript
+interface CharactersPageView {
+  items: CharacterDisplayItem[];  // the 10 items for the current page
+  total: number;                  // 82 — total characters (for MatPaginator length)
+}
+```
+
+---
+
+## Type Alias: `SwapiList<T>`
+
+Documents that swapi.info returns flat arrays, not pagination wrappers.
+
+```typescript
+// swapi.info returns flat arrays — no {count, next, previous, results} wrapper.
+type SwapiList<T> = T[];
 ```
 
 ---
@@ -122,54 +113,52 @@ function toFilmDisplayItem(f: Film): FilmDisplayItem {
 ## Data Flow Diagram
 
 ```
-SWAPI REST API
+swapi.info REST API
   │
-  │  GET /people/?page={n} → SwapiPage<Character>
-  │  GET /films/           → SwapiPage<Film>
+  │  GET /people  → Character[]  (82 items, all at once)
+  │  GET /films   → Film[]       (6 items, all at once)
   │
   ▼
 SwapiService (HttpClient)
-  │  shareReplay(1) on films only
+  │  shareReplay(1) on BOTH observables (cached for session lifetime)
   │  catchError on both
   │
   ├─► CharactersComponent
-  │     toObservable(currentPage)
-  │       .pipe(switchMap(page => getCharacters(page)))
-  │     → pageData$: Observable<SwapiPage<Character>>
-  │     → isLoading$, error$
-  │     Template: *ngFor over pageData$.results
-  │               each result → MatListItem (name, birth_year, gender, height, mass)
-  │               MatPaginator bound to pageData$.count
+  │     allCharacters$: Observable<CharacterDisplayItem[]>
+  │       = getCharacters().pipe(map(chars => chars.map(toCharacterDisplayItem)), shareReplay(1))
+  │
+  │     pageView$: Observable<CharactersPageView | null>
+  │       = combineLatest([allCharacters$, toObservable(currentPage)]).pipe(
+  │           map(([all, page]) => ({
+  │             items: all.slice(page * 10, (page + 1) * 10),
+  │             total: all.length
+  │           }))
+  │         )
+  │
+  │     Template: MatList with *ngFor over page.items
+  │               MatPaginator [length]="page.total" [pageSize]="10"
   │
   └─► FilmsComponent
-        getFilms().pipe(map(page => page.results.map(toFilmDisplayItem)))
-        → films$: Observable<FilmDisplayItem[]>
-        → isLoading$, error$
-        Template: *ngFor over films$
-                  each item → MatCard (episode_id, title, director, release_date)
-```
+        films$: Observable<FilmDisplayItem[] | null>
+          = getFilms().pipe(map(films => films.map(toFilmDisplayItem)), shareReplay(1))
+        Template: *ngFor over films$ → one MatCard per film
 
 ---
 
 ## State Transitions
 
-### Characters Page State
-
+### Characters Data State
 ```
-IDLE → LOADING (page requested)
-  → SUCCESS (data arrived)
-  → ERROR (HTTP failure)
-ERROR → LOADING (retry clicked)
-SUCCESS → LOADING (paginator page changed)
+LOADING (initial fetch) → CACHED (shareReplay emits on subscription)
+LOADING → ERROR (HTTP failure, no cache written)
+CACHED → PAGE_CHANGE (signal update → combineLatest recomputes slice, no HTTP)
 ```
 
-### Films Cache State
-
+### Films Data State
 ```
-UNCACHED → LOADING (first subscription)
-  → CACHED (data arrived, shareReplay holds it)
-  → ERROR (HTTP failure, no cache written)
-CACHED → CACHED (subsequent subscriptions replay immediately)
+LOADING (first subscription) → CACHED (shareReplay emits on subscription)
+LOADING → ERROR (HTTP failure)
+CACHED → CACHED (subsequent subscriptions replay immediately, no HTTP)
 ```
 
 ---
@@ -178,8 +167,8 @@ CACHED → CACHED (subsequent subscriptions replay immediately)
 
 | Field | Rule |
 |-------|------|
-| `SwapiPage.count` | Must be ≥ 0; MatPaginator length bound to this value |
-| `SwapiPage.results` | Must be an array; empty array renders empty state, not error |
-| `CharacterDisplayItem.name` | Rendered as primary text in list item; never expected to be empty from SWAPI |
+| `CharacterDisplayItem.name` | Rendered as primary text — never expected to be empty from swapi.info |
+| `CharactersPageView.items.length` | Always ≤ 10; may be < 10 on the last page (82 mod 10 = 2) |
+| `CharactersPageView.total` | Always 82 (static swapi.info dataset) |
 | `FilmDisplayItem.episode_id` | Rendered as number; no formatting conversion needed |
-| `FilmDisplayItem.release_date` | Displayed as-is (ISO string); no localisation conversion in this version |
+| `FilmDisplayItem.release_date` | Displayed as-is (ISO string) |

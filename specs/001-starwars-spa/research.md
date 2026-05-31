@@ -1,136 +1,107 @@
 # Research: Star Wars Explorer
 
 **Phase 0 output for**: `specs/001-starwars-spa/plan.md`
-**Date**: 2026-05-30
-
-All technical choices were pre-resolved from the SPDD REASONS Canvas analysis (`spdd/analysis/`) and implementation prompt (`spdd/prompt/`). This document consolidates the key decisions, rationale, and alternatives considered.
+**Date**: 2026-05-30 (revised after swapi.info clarification)
 
 ---
 
-## Decision 1: Angular 17 Standalone Architecture
+## Decision 1: SWAPI Instance — swapi.info
 
-**Decision**: Use Angular CLI v17 with `--standalone` flag; bootstrap via `bootstrapApplication`; no `NgModule` anywhere.
+**Decision**: Use `https://swapi.info/api` as the base URL, stored in `environment.ts`.
 
-**Rationale**: Angular 17 makes standalone the default and recommended mode. It eliminates the `NgModule` indirection layer, enables better tree-shaking (only imported components are bundled), and aligns with Angular's long-term direction. The `loadComponent` API for lazy-loaded routes is standalone-native and directly reduces the initial bundle.
+**Rationale**: `swapi.info` is the correct public SWAPI instance for this project (confirmed in spec clarification 2026-05-30). Its API contract differs fundamentally from `swapi.dev`:
+
+| | swapi.dev | swapi.info |
+|---|---|---|
+| Response shape | `{count, next, previous, results[]}` | `T[]` (flat array) |
+| People endpoint | `GET /people/?page=1` (paginated) | `GET /people` (all 82 at once) |
+| Films endpoint | `GET /films/` (wrapped) | `GET /films` (flat array of 6) |
+| Trailing slash | Required | Not used |
+| CORS | Supported | Supported |
 
 **Alternatives considered**:
-- NgModule-based architecture → rejected: contradicts explicit project requirement and inflates initial bundle.
+- `swapi.dev` → rejected: wrong API; has pagination wrapper that does not exist on swapi.info; also has known uptime issues.
 
 ---
 
-## Decision 2: JEST + jest-preset-angular for Unit Testing
+## Decision 2: Pagination Strategy — Client-Side
 
-**Decision**: Replace Angular CLI's default Karma/Jasmine test runner with JEST using the `jest-preset-angular` preset.
+**Decision**: Load all 82 characters in a single `GET /people` request, cache with `shareReplay(1)`, and paginate client-side using `MatPaginator` + array slice.
 
-**Rationale**: The project constitution mandates JEST exclusively (Principle IV). JEST runs in Node.js via jsdom (faster than browser-based Karma), supports parallel test execution, and has superior snapshot testing and coverage reporting. `jest-preset-angular` provides a TypeScript transformer and Angular-specific setup that makes the transition seamless.
+**Rationale**: swapi.info has no server-side pagination parameter. The full dataset (82 items) is small enough to cache without concern. Client-side pagination delivers:
+- Instant page navigation (no network round-trip after first load)
+- Simpler service interface (no `page` parameter)
+- Better CLS (no re-fetch spinner on page change after initial load)
 
-**Setup steps**:
-1. `npm install --save-dev jest @types/jest jest-environment-jsdom jest-preset-angular`
-2. Add `jest.config.ts` pointing to `jest-preset-angular` preset
-3. Add `setup-jest.ts` importing `jest-preset-angular/setup-jest`
-4. Remove `karma.conf.js` and `src/test.ts`
-5. Update `tsconfig.spec.json` to use `jest-preset-angular/build/ts-jest-transformer`
-6. Add Jest coverage thresholds (100%) to `jest.config.ts`
+**Implementation pattern**:
+```typescript
+combineLatest([allCharacters$, toObservable(currentPage)]).pipe(
+  map(([all, page]) => ({
+    items: all.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    total: all.length,
+  }))
+)
+```
 
 **Alternatives considered**:
-- Vitest → rejected (not a JEST runner; constitution explicitly prohibits non-JEST frameworks).
-- Keep Karma → rejected (constitution Principle IV mandates JEST).
+- Show all 82 characters without pagination → rejected: spec FR-002 mandates 10/page pagination.
+- Infinite scroll → rejected: spec explicitly requires `MatPaginator` navigation controls.
 
 ---
 
-## Decision 3: MCP Playwright for E2E Tests
+## Decision 3: Both Datasets Cached with shareReplay(1)
 
-**Decision**: Use MCP Playwright (`@playwright/test`) for end-to-end testing of all 3 user journeys.
+**Decision**: `SwapiService` caches both `getCharacters()` and `getFilms()` observables as private class fields (`charactersCache$`, `filmsCache$`) initialised lazily on first call.
 
-**Rationale**: Constitution Principle IV mandates MCP Playwright exclusively. Playwright supports multiple browsers (Chromium, Firefox, WebKit), has a clean async API, and integrates well with Angular applications. Tests live in `/e2e/tests/`.
+**Rationale**: 
+- Characters: the client-side pagination approach requires the full array to be available; re-fetching on every page navigation would defeat the purpose.
+- Films: static dataset (6 items); re-fetching on re-navigation wastes network bandwidth.
+- `shareReplay(1)` ensures all subsequent subscribers receive the cached emission immediately, satisfying spec SC-005 (revisit Films in < 100 ms) and reducing network requests.
 
-**E2E coverage required** (from spec user stories):
-- `characters.e2e.spec.ts` → US1: Characters list loads, pagination works, error state shown
-- `films.e2e.spec.ts` → US2: Films grid loads, error state shown
-- `navigation.e2e.spec.ts` → US3: Navigate between screens, active link highlighted
+---
+
+## Decision 4: Angular 17 Standalone with JEST
+
+**Decision**: `ng new --standalone`, bootstrapped via `app.config.ts` / `bootstrapApplication`. JEST with `jest-preset-angular@14` replaces Karma/Jasmine.
+
+**Rationale**: Angular 17 makes standalone the default. `jest-preset-angular@14` is the correct version for Angular 17 (`v15+` requires Angular 19+). Constitution Principle IV mandates JEST; `karma` is removed entirely.
+
+**Key jest config decisions**:
+- `jest.config.ts` requires `ts-node` as a peer dependency
+- `setupFilesAfterEnv` uses `jest-preset-angular/setup-env/zone` (new API; `setup-jest.js` import is deprecated)
+- `coverageThreshold` (not `coverageThresholds`) at 100% for all metrics
+- `app.routes.ts` and `app.config.ts` excluded from coverage collection (pure configuration)
+
+---
+
+## Decision 5: combineLatest + Signal for Client-Side Pagination
+
+**Decision**: Use `combineLatest([allCharacters$, toObservable(currentPage)])` to reactively recompute the current page slice whenever either the data arrives or the user navigates pages.
+
+**Rationale**: `toObservable` from `@angular/core/rxjs-interop` bridges Angular signals to RxJS observables, enabling the `async` pipe pattern in the template without manual subscriptions. `combineLatest` ensures the latest emission from BOTH streams is used, which is correct: if data arrives after a page change, the view updates; if the page changes after data arrives, the view also updates.
 
 **Alternatives considered**:
-- Cypress → rejected (constitution prohibition).
-- Protractor → rejected (deprecated + constitution prohibition).
+- `switchMap` on signal changes → only works if we want to re-fetch per page (not applicable here since data is cached).
+- Signal-only approach (no observable) → would require `NgSignals` pipe or computed signals for the template; less idiomatic in Angular 17 with `async` pipe.
 
 ---
 
-## Decision 4: SWAPI API Endpoint Selection
+## Decision 6: MCP Playwright for E2E Tests
 
-**Decision**: Use `https://swapi.dev/api` as the base URL, stored in `environment.ts`.
+**Decision**: `@playwright/test` for E2E, targeting `http://localhost:4200` with Chromium.
 
-**Rationale**: `swapi.dev` is the canonical public SWAPI instance. It supports CORS for browser requests, requires no authentication, and has been stable since 2014. The base URL is externalised to `environment.ts` so it can be overridden without code changes.
-
-**Key endpoints consumed**:
-- `GET /people/?page={n}` — paginated characters (10/page, ~82 total)
-- `GET /films/` — all films in a single response (~6 total)
-
-**Alternatives considered**:
-- `swapi.py4e.com` → same API, different host; available as a fallback if `swapi.dev` has downtime. Not set as default to keep environment simple.
-
----
-
-## Decision 5: Routing Strategy — `loadComponent` Lazy Loading
-
-**Decision**: Use `loadComponent(() => import(...))` for both `CharactersComponent` and `FilmsComponent` in `app.routes.ts`.
-
-**Rationale**: This is the Angular 17 standalone-native approach to lazy loading. Each route's component JS chunk is only downloaded when the user navigates to that route, reducing the initial bundle size and improving LCP. The Angular router handles splitting automatically.
-
-**Alternatives considered**:
-- Eagerly imported routes → rejected (larger initial bundle, degrades LCP).
-- `loadChildren` with route modules → rejected (requires `NgModule`, contradicts standalone mandate).
-
----
-
-## Decision 6: Change Detection — `OnPush` on All Components
-
-**Decision**: All components declare `changeDetection: ChangeDetectionStrategy.OnPush`.
-
-**Rationale**: `OnPush` limits Angular's dirty-checking reconciliation cycle to explicit input changes, emitted events, and async pipe emissions. For a data-display app driven by observables, this means zero unnecessary DOM traversals between page navigations — directly improving INP.
-
-**Alternatives considered**:
-- Default change detection → rejected (triggers on every browser event, degrades INP).
-
----
-
-## Decision 7: Films Caching — `shareReplay(1)` on Service Observable
-
-**Decision**: `SwapiService.getFilms()` returns a lazily initialised `shareReplay(1)` observable stored as a private class field `filmsCache$`.
-
-**Rationale**: Films are a static dataset (~6 items, no pagination). Once fetched, the same data serves all subsequent navigations to the Films screen without a new HTTP request. `shareReplay(1)` replays the last emission to new subscribers and is the idiomatic RxJS caching pattern. This satisfies spec SC-005 (revisit Films in < 100 ms).
-
-**Alternatives considered**:
-- `localStorage` / `IndexedDB` → overkill for an in-session, read-only, 6-item dataset.
-- Re-fetch on every navigation → wastes network and degrades INP.
-
----
-
-## Decision 8: Loading State & CLS Prevention
-
-**Decision**: Each listing component has a fixed-`min-height` container. The loading spinner occupies the same vertical space as the list/grid, preventing layout reflow when data arrives.
-
-**Rationale**: CLS (Cumulative Layout Shift) penalises pages where content shifts after initial paint. Setting `min-height: 600px` on the characters container and `min-height: 400px` on the films container ensures the page layout is stable regardless of loading state. This is the primary mechanism for hitting CLS ≤ 0.1.
-
----
-
-## Decision 9: Error Handling — Inline Error State + Retry
-
-**Decision**: Each component exposes an `error$` observable derived from the data stream via `catchError`. When an error occurs, an inline error message in Portuguese is rendered with a retry button.
-
-**Rationale**: The spec mandates Portuguese error messages (FR-007) and a retry option. Using inline state (not a `MatSnackBar` toast) keeps the error visible as long as the problem persists. The retry button re-triggers the observable chain by calling the service method again.
+**Rationale**: Constitution Principle IV mandates MCP Playwright exclusively. Three test files covering US1, US2, US3 user journeys.
 
 ---
 
 ## NEEDS CLARIFICATION — All Resolved
 
-All ambiguities identified in the SPDD analysis phase are resolved:
-
 | Item | Resolution |
 |------|------------|
-| Fields to display per character | name, birth_year, gender, height, mass |
-| Fields to display per film | episode_id, title, director, release_date |
-| Pagination vs full list | MatPaginator for characters (server-side 10/page); no pagination for films |
-| Default landing route | `/characters` (redirect from `''`) |
-| Language for UI copy | Portuguese (consistent with requirement language) |
+| SWAPI instance and endpoint structure | swapi.info, flat arrays, no pagination wrapper (spec clarification 2026-05-30) |
+| Pagination approach | Client-side via array slice + MatPaginator |
+| Fields displayed per character | name, birth_year, gender, height, mass |
+| Fields displayed per film | episode_id, title, director, release_date |
+| Default landing route | `/characters` |
+| Language for UI copy | Portuguese |
 | Detail screens | Listing-only; no detail routes |
-| SWAPI instance | `swapi.dev` as primary, base URL in `environment.ts` |

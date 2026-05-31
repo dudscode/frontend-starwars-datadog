@@ -2,73 +2,56 @@
 
 **Type**: Internal Angular service contract
 **File**: `src/app/core/services/swapi.service.ts`
-**Date**: 2026-05-30
+**Date**: 2026-05-30 (revised for swapi.info flat-array API)
 
 This document defines the public API of `SwapiService` — the single point of HTTP access in the application. All components MUST use this service; no component may inject `HttpClient` directly.
 
 ---
 
-## Method: `getCharacters(page?: number): Observable<SwapiPage<Character>>`
+## Method: `getCharacters(): Observable<Character[]>`
 
-**Purpose**: Fetch one page of Star Wars characters from SWAPI.
+**Purpose**: Fetch and cache the full list of Star Wars characters from swapi.info.
 
-**Parameters**:
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `page` | `number` | `1` | Page number (1-indexed). |
+**Parameters**: None — swapi.info returns all 82 characters in one response.
 
-**Returns**: `Observable<SwapiPage<Character>>`
-- Emits once with the page data, then completes.
-- Does NOT replay on re-subscription (no `shareReplay`) — each call fetches a fresh page.
-- On HTTP error: emits an error notification with `Error` message `'Failed to load characters'`.
-
-**Usage in component**:
-```typescript
-toObservable(this.currentPage).pipe(
-  switchMap(page => this.swapiService.getCharacters(page))
-)
-```
+**Returns**: `Observable<Character[]>`
+- On first call: triggers `GET https://swapi.info/api/people`, caches with `shareReplay(1)`.
+- On subsequent calls: returns the SAME `Observable` instance (cached reference). Replays cached result immediately on subscription — no new HTTP request.
+- On HTTP error: emits `Error('Failed to load characters')`. No cache is written.
 
 **Guarantees**:
-- Always returns an `Observable<SwapiPage<Character>>` — never a `Promise`.
-- Error is wrapped in a typed `Error` object; components must handle via `catchError`.
+- Always returns `Observable<Character[]>`, never `Promise`.
+- Same observable instance returned on every call after the first.
+- No `page` parameter — swapi.info has no server-side pagination.
 
 ---
 
-## Method: `getFilms(): Observable<SwapiPage<Film>>`
+## Method: `getFilms(): Observable<Film[]>`
 
-**Purpose**: Fetch all Star Wars films from SWAPI. Cached in memory after the first call.
+**Purpose**: Fetch and cache all Star Wars films from swapi.info.
 
-**Parameters**: none
+**Parameters**: None.
 
-**Returns**: `Observable<SwapiPage<Film>>`
-- On first call: triggers an HTTP GET and caches the result via `shareReplay(1)`.
-- On subsequent calls: replays the cached result immediately (no new HTTP request).
-- On HTTP error: emits an error notification with `Error` message `'Failed to load films'`. No cache is written.
-
-**Usage in component**:
-```typescript
-this.swapiService.getFilms().pipe(
-  map(page => page.results.map(toFilmDisplayItem))
-)
-```
+**Returns**: `Observable<Film[]>`
+- On first call: triggers `GET https://swapi.info/api/films`, caches with `shareReplay(1)`.
+- On subsequent calls: returns the SAME `Observable` instance. Replays immediately.
+- On HTTP error: emits `Error('Failed to load films')`. No cache is written.
 
 **Guarantees**:
-- Always returns the SAME `Observable` instance after the first call (cached reference).
-- Never returns a `Promise`.
-- Error is wrapped in a typed `Error` object; components must handle via `catchError`.
+- Always returns `Observable<Film[]>`, never `Promise`.
+- Same observable instance returned on every call after the first (satisfies SC-005: revisit Films in < 100 ms).
 
 ---
 
 ## Component Public API Contract
 
-Routed components (`AppComponent`, `CharactersComponent`, `FilmsComponent`) expose NO `@Input()` or `@Output()` bindings. They are route-level views, not reusable shared components.
+Routed components expose NO `@Input()` or `@Output()` bindings.
 
-| Component | @Input() | @Output() | Reason |
-|-----------|----------|-----------|--------|
+| Component | @Input() | @Output() | Notes |
+|-----------|----------|-----------|-------|
 | `AppComponent` | none | none | Shell — router manages lifecycle |
-| `CharactersComponent` | none | none | Routed view — no parent to bind to |
-| `FilmsComponent` | none | none | Routed view — no parent to bind to |
+| `CharactersComponent` | none | none | Routed view — pagination via signal |
+| `FilmsComponent` | none | none | Routed view |
 
 ---
 
