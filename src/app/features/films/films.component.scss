@@ -1,0 +1,41 @@
+.films-page {
+  min-height: 400px;
+  padding: 16px;
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+.error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: 16px;
+}
+
+.error-message {
+  color: var(--mdc-theme-error, #f44336);
+  font-size: 1rem;
+  text-align: center;
+}
+
+.film-card {
+  mat-card-title {
+    font-size: 1rem;
+    line-height: 1.4;
+  }
+
+  mat-card-content {
+    padding-top: 8px;
+
+    p {
+      margin: 4px 0;
+    }
+  }
+}

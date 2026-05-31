@@ -1,0 +1,40 @@
+.characters-page {
+  min-height: 600px;
+  padding: 16px;
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 600px;
+}
+
+.error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 600px;
+  gap: 16px;
+}
+
+.error-message {
+  color: var(--mdc-theme-error, #f44336);
+  font-size: 1rem;
+  text-align: center;
+}
+
+.characters-list {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.character-item {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+mat-paginator {
+  max-width: 900px;
+  margin: 0 auto;
+}
