@@ -12,7 +12,7 @@ const mockFilms: Film[] = [
   { episode_id: 6, title: 'Return of the Jedi', director: 'Richard Marquand', producer: 'Howard Kazanjian', release_date: '1983-05-25', opening_crawl: '...', characters: [], url: 'https://swapi.info/api/films/3' },
 ];
 
-const obsMock = { watchView: jest.fn() };
+const obsMock = { startTimer: jest.fn(), logViewReady: jest.fn() };
 
 describe('FilmsComponent', () => {
   let component: FilmsComponent;
@@ -36,7 +36,7 @@ describe('FilmsComponent', () => {
     component = fixture.componentInstance;
   });
 
-  beforeEach(() => { obsMock.watchView.mockClear(); });
+  beforeEach(() => { obsMock.startTimer.mockClear(); obsMock.logViewReady.mockClear(); });
 
   it('should create', () => {
     expect(component).toBeTruthy();
@@ -98,10 +98,18 @@ describe('FilmsComponent', () => {
   });
 
   describe('ObservabilityService integration', () => {
-    it('should call watchView with "films" and films$ in ngOnInit', () => {
-      fixture.detectChanges();
-      expect(obsMock.watchView).toHaveBeenCalledWith('films', component.films$);
+    it('should call startTimer("films") when component is constructed', () => {
+      // Create a fresh instance after mock is cleared so we capture the constructor call
+      const fresh = TestBed.createComponent(FilmsComponent);
+      expect(obsMock.startTimer).toHaveBeenCalledWith('films');
+      fresh.destroy();
     });
+
+    it('should call logViewReady("films") in ngOnInit when data arrives', fakeAsync(() => {
+      fixture.detectChanges();
+      tick();
+      expect(obsMock.logViewReady).toHaveBeenCalledWith('films');
+    }));
 
     it('should implement OnInit interface', () => {
       expect(typeof component.ngOnInit).toBe('function');

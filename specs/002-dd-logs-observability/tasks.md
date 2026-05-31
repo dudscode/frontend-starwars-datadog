@@ -25,11 +25,11 @@ description: "Task list for DD_LOGS Observability Layer — Angular 17 structure
 
 **Purpose**: Shared type definitions and test infrastructure used by ALL subsequent tasks. Must complete before any user story work.
 
-- [ ] T001 [P] Create `src/app/core/types/dd-logs.types.ts` with: `EventType` union (`'latency' | 'request_error' | 'js_error' | 'render_complete'`), `Severity` union (`'info' | 'warning' | 'error'`), `LogPayload` interface (8 fields, all optional except `event_type`/`severity`), `DdLogsInstance` interface (`setGlobalContextProperty`, `logger.log`), `declare global { interface Window { DD_LOGS?: DdLogsInstance } }`
-- [ ] T002 [P] Create `src/app/core/testing/dd-logs.mock.ts` with `createDdLogsMock()` returning `{ setGlobalContextProperty: jest.fn(), logger: { log: jest.fn() } }` and `setupDdLogsMock()` that assigns mock to `window.DD_LOGS` in `beforeEach` and deletes it in `afterEach`
-- [ ] T003 [P] Update `jest.config.ts` `collectCoverageFrom` to add `'!src/app/core/testing/**'` exclusion so `dd-logs.mock.ts` does not count toward production coverage
-- [ ] T004 [P] Update `angular.json` under `projects.starwars-explorer.architect.build.options` to add `"define": { "__APP_VERSION__": "\"unknown\"", "__DEPLOY_TYPE__": "\"local\"" }` for build-time string replacement
-- [ ] T005 [P] Update `src/environments/environment.ts` to add `appVersion: '__APP_VERSION__'` and `deployType: '__DEPLOY_TYPE__'` with TODO comments explaining CI pipeline variable injection (`APP_VERSION` and `DEPLOY_TYPE` env vars)
+- [x] T001 [P] Create `src/app/core/types/dd-logs.types.ts` with: `EventType` union (`'latency' | 'request_error' | 'js_error' | 'render_complete'`), `Severity` union (`'info' | 'warning' | 'error'`), `LogPayload` interface (8 fields, all optional except `event_type`/`severity`), `DdLogsInstance` interface (`setGlobalContextProperty`, `logger.log`), `declare global { interface Window { DD_LOGS?: DdLogsInstance } }`
+- [x] T002 [P] Create `src/app/core/testing/dd-logs.mock.ts` with `createDdLogsMock()` returning `{ setGlobalContextProperty: jest.fn(), logger: { log: jest.fn() } }` and `setupDdLogsMock()` that assigns mock to `window.DD_LOGS` in `beforeEach` and deletes it in `afterEach`
+- [x] T003 [P] Update `jest.config.ts` `collectCoverageFrom` to add `'!src/app/core/testing/**'` exclusion so `dd-logs.mock.ts` does not count toward production coverage
+- [x] T004 [P] Update `angular.json` under `projects.starwars-explorer.architect.build.options` to add `"define": { "__APP_VERSION__": "\"unknown\"", "__DEPLOY_TYPE__": "\"local\"" }` for build-time string replacement
+- [x] T005 [P] Update `src/environments/environment.ts` to add `appVersion: '__APP_VERSION__'` and `deployType: '__DEPLOY_TYPE__'` with TODO comments explaining CI pipeline variable injection (`APP_VERSION` and `DEPLOY_TYPE` env vars)
 
 **Checkpoint**: Type infrastructure ready. All subsequent tasks can import from `dd-logs.types.ts` and use `setupDdLogsMock()` in tests.
 
@@ -45,7 +45,7 @@ description: "Task list for DD_LOGS Observability Layer — Angular 17 structure
 
 ### Tests for US4 ⚠️ Write FIRST — verify they FAIL before T007
 
-- [ ] T006 [US4] Write JEST unit test for `ObservabilityService` in `src/app/core/services/observability.service.spec.ts`:
+- [x] T006 [US4] Write JEST unit test for `ObservabilityService` in `src/app/core/services/observability.service.spec.ts`:
   - Import `setupDdLogsMock` from `../testing/dd-logs.mock`
   - Test constructor: assert `setGlobalContextProperty('app_version', ...)` and `setGlobalContextProperty('deploy_type', ...)` called once when `window.DD_LOGS` exists; assert NOT called when `window.DD_LOGS` is undefined
   - Test `log()`: assert `window.DD_LOGS.logger.log` called with `(payload.event_type, {...payload}, ddLevel)`; assert severity `'error'` → level `'error'`, `'warning'` → `'warn'`, `'info'` → `'info'`; assert early return (no call) when `window.DD_LOGS` undefined
@@ -53,7 +53,7 @@ description: "Task list for DD_LOGS Observability Layer — Angular 17 structure
 
 ### Implementation for US4
 
-- [ ] T007 [US4] Create `ObservabilityService` in `src/app/core/services/observability.service.ts` (depends T001, T005, T006):
+- [x] T007 [US4] Create `ObservabilityService` in `src/app/core/services/observability.service.ts` (depends T001, T005, T006):
   - `@Injectable({ providedIn: 'root' })`
   - Private constant `LATENCY_THRESHOLD_MS = 5000`
   - Constructor: guard `if (!window.DD_LOGS) return`; call `window.DD_LOGS.setGlobalContextProperty('app_version', environment.appVersion)` and `setGlobalContextProperty('deploy_type', environment.deployType)`
@@ -72,13 +72,13 @@ description: "Task list for DD_LOGS Observability Layer — Angular 17 structure
 
 ### Tests for US1 ⚠️ Write FIRST — verify they FAIL before T009/T011
 
-- [ ] T008 [P] [US1] Add JEST unit test to `src/app/features/characters/characters.component.spec.ts`: mock `ObservabilityService` (provide `{ provide: ObservabilityService, useValue: { watchView: jest.fn() } }`); assert `watchView` was called with `'characters'` and the component's `pageView$` observable in `ngOnInit`; assert `OnInit` interface is implemented — ensure test FAILS before T009
-- [ ] T010 [P] [US1] Add JEST unit test to `src/app/features/films/films.component.spec.ts`: mock `ObservabilityService`; assert `watchView` was called with `'films'` and the component's `films$` observable in `ngOnInit` — ensure test FAILS before T011
+- [x] T008 [P] [US1] Add JEST unit test to `src/app/features/characters/characters.component.spec.ts`: mock `ObservabilityService` (provide `{ provide: ObservabilityService, useValue: { watchView: jest.fn() } }`); assert `watchView` was called with `'characters'` and the component's `pageView$` observable in `ngOnInit`; assert `OnInit` interface is implemented — ensure test FAILS before T009
+- [x] T010 [P] [US1] Add JEST unit test to `src/app/features/films/films.component.spec.ts`: mock `ObservabilityService`; assert `watchView` was called with `'films'` and the component's `films$` observable in `ngOnInit` — ensure test FAILS before T011
 
 ### Implementation for US1
 
-- [ ] T009 [US1] Update `src/app/features/characters/characters.component.ts` (depends T007, T008): add `private obs = inject(ObservabilityService)` field; add `private readonly viewStart = performance.now()` field; implement `ngOnInit(): void { this.obs.watchView('characters', this.pageView$); }`; add `OnInit` to `implements` clause; add `ObservabilityService` import — NO changes to template, `pageView$` chain, or any other logic
-- [ ] T011 [US1] Update `src/app/features/films/films.component.ts` (depends T007, T010): same pattern — inject `ObservabilityService`, add `viewStart`, implement `ngOnInit` calling `this.obs.watchView('films', this.films$)`; add `OnInit` to `implements` clause — NO changes to template or `films$` chain
+- [x] T009 [US1] Update `src/app/features/characters/characters.component.ts` (depends T007, T008): add `private obs = inject(ObservabilityService)` field; add `private readonly viewStart = performance.now()` field; implement `ngOnInit(): void { this.obs.watchView('characters', this.pageView$); }`; add `OnInit` to `implements` clause; add `ObservabilityService` import — NO changes to template, `pageView$` chain, or any other logic
+- [x] T011 [US1] Update `src/app/features/films/films.component.ts` (depends T007, T010): same pattern — inject `ObservabilityService`, add `viewStart`, implement `ngOnInit` calling `this.obs.watchView('films', this.films$)`; add `OnInit` to `implements` clause — NO changes to template or `films$` chain
 
 **Checkpoint**: Navigate to `/characters` and `/films` with console mock — timing events appear in the browser console.
 
@@ -92,12 +92,12 @@ description: "Task list for DD_LOGS Observability Layer — Angular 17 structure
 
 ### Tests for US2 ⚠️ Write FIRST — verify they FAIL before T013/T014
 
-- [ ] T012 [US2] Write JEST unit test for `DdLogsInterceptor` in `src/app/core/interceptors/dd-logs.interceptor.spec.ts` (depends T001): mock `ObservabilityService`; use `HttpClientTestingModule` + `HTTP_INTERCEPTORS` provider; assert `obs.log` NOT called on successful (200) request; assert `obs.log` called with `event_type: 'request_error'`, `severity: 'error'`, `http_status: 500`, `endpoint: <url>`, `error_message: <message>` on 500 error; assert `obs.log` called with `http_status: 0` on network error (flush with `{ status: 0 }`); assert error is re-thrown (subscriber receives the error) — ensure tests FAIL before T013
+- [x] T012 [US2] Write JEST unit test for `DdLogsInterceptor` in `src/app/core/interceptors/dd-logs.interceptor.spec.ts` (depends T001): mock `ObservabilityService`; use `HttpClientTestingModule` + `HTTP_INTERCEPTORS` provider; assert `obs.log` NOT called on successful (200) request; assert `obs.log` called with `event_type: 'request_error'`, `severity: 'error'`, `http_status: 500`, `endpoint: <url>`, `error_message: <message>` on 500 error; assert `obs.log` called with `http_status: 0` on network error (flush with `{ status: 0 }`); assert error is re-thrown (subscriber receives the error) — ensure tests FAIL before T013
 
 ### Implementation for US2
 
-- [ ] T013 [US2] Create `DdLogsInterceptor` in `src/app/core/interceptors/dd-logs.interceptor.ts` (depends T001, T007, T012): implement `HttpInterceptor`; inject `ObservabilityService` via constructor; `intercept(req, next)` returns `next.handle(req).pipe(catchError((error: HttpErrorResponse) => { this.obs.log({ event_type: 'request_error', severity: 'error', http_status: error.status ?? 0, endpoint: req.url, error_message: error.message }); return throwError(() => error); }))`
-- [ ] T014 [US2] Update `src/app/app.config.ts` to register interceptor (depends T013): change `provideHttpClient(withFetch())` → `provideHttpClient(withFetch(), withInterceptorsFromDi())`; add `{ provide: HTTP_INTERCEPTORS, useClass: DdLogsInterceptor, multi: true }` to providers; add imports: `withInterceptorsFromDi`, `HTTP_INTERCEPTORS` from `@angular/common/http`; `DdLogsInterceptor` from `./core/interceptors/dd-logs.interceptor`
+- [x] T013 [US2] Create `DdLogsInterceptor` in `src/app/core/interceptors/dd-logs.interceptor.ts` (depends T001, T007, T012): implement `HttpInterceptor`; inject `ObservabilityService` via constructor; `intercept(req, next)` returns `next.handle(req).pipe(catchError((error: HttpErrorResponse) => { this.obs.log({ event_type: 'request_error', severity: 'error', http_status: error.status ?? 0, endpoint: req.url, error_message: error.message }); return throwError(() => error); }))`
+- [x] T014 [US2] Update `src/app/app.config.ts` to register interceptor (depends T013): change `provideHttpClient(withFetch())` → `provideHttpClient(withFetch(), withInterceptorsFromDi())`; add `{ provide: HTTP_INTERCEPTORS, useClass: DdLogsInterceptor, multi: true }` to providers; add imports: `withInterceptorsFromDi`, `HTTP_INTERCEPTORS` from `@angular/common/http`; `DdLogsInterceptor` from `./core/interceptors/dd-logs.interceptor`
 
 **Checkpoint**: Enable DevTools Network → Offline → navigate to `/characters`; verify `request_error` event with `http_status: 0` in console mock.
 
@@ -111,13 +111,13 @@ description: "Task list for DD_LOGS Observability Layer — Angular 17 structure
 
 ### Tests for US3 ⚠️ Write FIRST — verify they FAIL before T016/T017
 
-- [ ] T015 [US3] Write JEST unit test for `GlobalErrorHandler` in `src/app/core/handlers/global-error.handler.spec.ts` (depends T001): create mock `ObservabilityService`; create mock `Injector` returning the mock service via `get(ObservabilityService)`; spy on `console.error`; assert `console.error(error)` called for every error; assert `obs.log({ event_type: 'js_error', severity: 'error', error_message: 'test' })` called for `Error` objects; assert `obs.log` called with `String(value)` for non-Error thrown values (e.g., a plain string); assert no exception thrown when `Injector.get` throws (service unavailable) — ensure tests FAIL before T016
+- [x] T015 [US3] Write JEST unit test for `GlobalErrorHandler` in `src/app/core/handlers/global-error.handler.spec.ts` (depends T001): create mock `ObservabilityService`; create mock `Injector` returning the mock service via `get(ObservabilityService)`; spy on `console.error`; assert `console.error(error)` called for every error; assert `obs.log({ event_type: 'js_error', severity: 'error', error_message: 'test' })` called for `Error` objects; assert `obs.log` called with `String(value)` for non-Error thrown values (e.g., a plain string); assert no exception thrown when `Injector.get` throws (service unavailable) — ensure tests FAIL before T016
 
 ### Implementation for US3
 
-- [ ] T016 [US3] Create `GlobalErrorHandler` in `src/app/core/handlers/global-error.handler.ts` (depends T001, T007, T015): implement `ErrorHandler`; inject `Injector` (NOT `ObservabilityService`) via constructor; `handleError(error: unknown): void { console.error(error); try { const obs = this.injector.get(ObservabilityService); obs.log({ event_type: 'js_error', severity: 'error', error_message: error instanceof Error ? error.message : String(error) }); } catch {} }`
-- [ ] T017 [US3] Update `src/main.ts` to add `unhandledrejection` listener (depends T007, T016): change to `.then(appRef => { const obs = appRef.injector.get(ObservabilityService); window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => { obs.log({ event_type: 'js_error', severity: 'error', error_message: event.reason instanceof Error ? event.reason.message : String(event.reason ?? 'Unhandled rejection') }); }); }).catch((err: unknown) => console.error(err))`; import `ObservabilityService` from `./app/core/services/observability.service`
-- [ ] T018 [US3] Update `src/app/app.config.ts` to register `GlobalErrorHandler` (depends T016): add `{ provide: ErrorHandler, useClass: GlobalErrorHandler }` to providers; add imports: `ErrorHandler` from `@angular/core`; `GlobalErrorHandler` from `./core/handlers/global-error.handler`
+- [x] T016 [US3] Create `GlobalErrorHandler` in `src/app/core/handlers/global-error.handler.ts` (depends T001, T007, T015): implement `ErrorHandler`; inject `Injector` (NOT `ObservabilityService`) via constructor; `handleError(error: unknown): void { console.error(error); try { const obs = this.injector.get(ObservabilityService); obs.log({ event_type: 'js_error', severity: 'error', error_message: error instanceof Error ? error.message : String(error) }); } catch {} }`
+- [x] T017 [US3] Update `src/main.ts` to add `unhandledrejection` listener (depends T007, T016): change to `.then(appRef => { const obs = appRef.injector.get(ObservabilityService); window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => { obs.log({ event_type: 'js_error', severity: 'error', error_message: event.reason instanceof Error ? event.reason.message : String(event.reason ?? 'Unhandled rejection') }); }); }).catch((err: unknown) => console.error(err))`; import `ObservabilityService` from `./app/core/services/observability.service`
+- [x] T018 [US3] Update `src/app/app.config.ts` to register `GlobalErrorHandler` (depends T016): add `{ provide: ErrorHandler, useClass: GlobalErrorHandler }` to providers; add imports: `ErrorHandler` from `@angular/core`; `GlobalErrorHandler` from `./core/handlers/global-error.handler`
 
 **Checkpoint**: All three user stories functional. Chrome DevTools → Console shows JS errors routed to DD_LOGS mock. `unhandledrejection` fires for unresolved promises.
 
@@ -127,10 +127,10 @@ description: "Task list for DD_LOGS Observability Layer — Angular 17 structure
 
 **Purpose**: Quality gates, build verification, and documentation before PR.
 
-- [ ] T019 [P] Run `npx jest --coverage` and verify 100% coverage across all 3 new production files (`observability.service.ts`, `dd-logs.interceptor.ts`, `global-error.handler.ts`) plus all 34 existing tests still pass; fix any coverage gaps
-- [ ] T020 Run `ng build` and verify zero errors and zero budget violations
-- [ ] T021 Run `ng serve`, inject console DD_LOGS mock, navigate to `/characters` and `/films`, verify `render_complete` events appear; go offline via DevTools, reload, verify `request_error` events appear
-- [ ] T022 Update `README.md` with an "Observability" section documenting: what events are captured; how to use the console mock locally; CI variable names (`APP_VERSION`, `DEPLOY_TYPE`) and the `ng build --define` command
+- [x] T019 [P] Run `npx jest --coverage` and verify 100% coverage across all 3 new production files (`observability.service.ts`, `dd-logs.interceptor.ts`, `global-error.handler.ts`) plus all 34 existing tests still pass; fix any coverage gaps
+- [x] T020 Run `ng build` and verify zero errors and zero budget violations
+- [x] T021 Run `ng serve`, inject console DD_LOGS mock, navigate to `/characters` and `/films`, verify `render_complete` events appear; go offline via DevTools, reload, verify `request_error` events appear
+- [x] T022 Update `README.md` with an "Observability" section documenting: what events are captured; how to use the console mock locally; CI variable names (`APP_VERSION`, `DEPLOY_TYPE`) and the `ng build --define` command
 
 ---
 

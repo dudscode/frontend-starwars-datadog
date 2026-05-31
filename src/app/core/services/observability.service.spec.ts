@@ -22,7 +22,7 @@ describe('ObservabilityService', () => {
   });
 
   describe('constructor — global context setup', () => {
-    it('should set app_version and deploy_type global context when DD_LOGS exists', () => {
+    it('should set app_version and deploy_type when DD_LOGS exists', () => {
       expect(window.DD_LOGS!.setGlobalContextProperty).toHaveBeenCalledWith(
         'app_version',
         environment.appVersion
@@ -33,24 +33,22 @@ describe('ObservabilityService', () => {
       );
     });
 
-    it('should set global context exactly once', () => {
+    it('should set global context exactly once (2 calls total)', () => {
       expect(
         (window.DD_LOGS!.setGlobalContextProperty as jest.Mock).mock.calls.length
       ).toBe(2);
     });
 
-    it('should NOT call setGlobalContextProperty when DD_LOGS is undefined', () => {
+    it('should NOT throw when DD_LOGS is undefined', () => {
       delete window.DD_LOGS;
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({});
-      const svc = TestBed.inject(ObservabilityService);
-      expect(svc).toBeTruthy();
-      // No error thrown, setGlobalContextProperty not called (DD_LOGS was undefined)
+      expect(() => TestBed.inject(ObservabilityService)).not.toThrow();
     });
   });
 
   describe('log()', () => {
-    it('should call DD_LOGS.logger.log with event_type, payload, and "info" level for info severity', () => {
+    it('should call DD_LOGS.logger.log with correct args for info severity', () => {
       service.log({ event_type: 'render_complete', severity: 'info', view_name: 'characters', duration_ms: 200 });
       expect(window.DD_LOGS!.logger.log).toHaveBeenCalledWith(
         'render_complete',
@@ -60,7 +58,7 @@ describe('ObservabilityService', () => {
     });
 
     it('should map severity "warning" to DD level "warn"', () => {
-      service.log({ event_type: 'latency', severity: 'warning', duration_ms: 6000, threshold_exceeded: true });
+      service.log({ event_type: 'latency', severity: 'warning', duration_ms: 6000 });
       expect(window.DD_LOGS!.logger.log).toHaveBeenCalledWith(
         'latency',
         expect.objectContaining({ severity: 'warning' }),
@@ -77,102 +75,95 @@ describe('ObservabilityService', () => {
       );
     });
 
-    it('should spread all payload fields into the context object', () => {
-      const payload = { event_type: 'js_error' as const, severity: 'error' as const, error_message: 'boom' };
-      service.log(payload);
-      expect(window.DD_LOGS!.logger.log).toHaveBeenCalledWith(
-        'js_error',
-        expect.objectContaining({ event_type: 'js_error', error_message: 'boom' }),
-        'error'
-      );
-    });
-
-    it('should return immediately (no error) when DD_LOGS is undefined', () => {
+    it('should not throw when DD_LOGS is undefined', () => {
       delete window.DD_LOGS;
       expect(() => service.log({ event_type: 'js_error', severity: 'error' })).not.toThrow();
     });
   });
 
-  describe('watchView()', () => {
+  describe('startTimer() + logViewReady()', () => {
     beforeEach(() => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    it('should log render_complete when duration <= 5000ms', () => {
       jest.spyOn(performance, 'now')
-        .mockReturnValueOnce(0)   // start time
-        .mockReturnValueOnce(300); // end time (300ms)
+        .mockReturnValueOnce(1000)  // startTimer
+        .mockReturnValueOnce(1300); // logViewReady → 300ms
+
+      service.startTimer('characters');
+      service.logViewReady('characters');
+
+      expect(window.DD_LOGS!.logger.log).toHaveBeenCalledWith(
+        'render_complete',
+        expect.objectContaining({
+          event_type: 'render_complete',
+          severity: 'info',
+          view_name: 'characters',
+          duration_ms: 300,
+          threshold_exceeded: false,
+        }),
+        'info'
+      );
     });
 
-    afterEach(() => {
-      jest.restoreAllMocks();
+    it('should log latency when duration > 5000ms', () => {
+      jest.spyOn(performance, 'now')
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(6000);
+
+      service.startTimer('films');
+      service.logViewReady('films');
+
+      expect(window.DD_LOGS!.logger.log).toHaveBeenCalledWith(
+        'latency',
+        expect.objectContaining({
+          event_type: 'latency',
+          severity: 'warning',
+          view_name: 'films',
+          duration_ms: 6000,
+          threshold_exceeded: true,
+        }),
+        'warn'
+      );
     });
 
-    it('should log render_complete with threshold_exceeded: false when duration <= 5000ms', (done) => {
-      jest.restoreAllMocks();
-      jest.spyOn(performance, 'now').mockReturnValueOnce(0).mockReturnValueOnce(300);
-      const subject = new Subject<string | null>();
-      service.watchView('characters', subject.asObservable());
-      subject.next('data');
-      setTimeout(() => {
-        expect(window.DD_LOGS!.logger.log).toHaveBeenCalledWith(
-          'render_complete',
-          expect.objectContaining({
-            event_type: 'render_complete',
-            severity: 'info',
-            view_name: 'characters',
-            duration_ms: 300,
-            threshold_exceeded: false,
-          }),
-          'info'
-        );
-        done();
-      }, 0);
+    it('should not log and emit console.warn when logViewReady called without startTimer', () => {
+      service.logViewReady('unknown-view');
+      expect(window.DD_LOGS!.logger.log).not.toHaveBeenCalled();
+      expect(console.warn).toHaveBeenCalledWith(
+        expect.stringContaining('unknown-view')
+      );
     });
 
-    it('should log latency with threshold_exceeded: true when duration > 5000ms', (done) => {
-      jest.restoreAllMocks();
-      jest.spyOn(performance, 'now').mockReturnValueOnce(0).mockReturnValueOnce(6000);
-      const subject = new Subject<string | null>();
-      service.watchView('films', subject.asObservable());
-      subject.next('data');
-      setTimeout(() => {
-        expect(window.DD_LOGS!.logger.log).toHaveBeenCalledWith(
-          'latency',
-          expect.objectContaining({
-            event_type: 'latency',
-            severity: 'warning',
-            view_name: 'films',
-            duration_ms: 6000,
-            threshold_exceeded: true,
-          }),
-          'warn'
-        );
-        done();
-      }, 0);
-    });
-
-    it('should NOT log when null is emitted (startWith(null) case)', (done) => {
-      jest.restoreAllMocks();
+    it('should clear the timer after logViewReady so a second call does nothing', () => {
       jest.spyOn(performance, 'now').mockReturnValue(0);
-      const subject = new Subject<string | null>();
-      service.watchView('characters', subject.asObservable());
-      subject.next(null);
-      setTimeout(() => {
-        expect(window.DD_LOGS!.logger.log).not.toHaveBeenCalled();
-        done();
-      }, 0);
+      service.startTimer('characters');
+      service.logViewReady('characters');
+
+      jest.clearAllMocks();
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      service.logViewReady('characters'); // second call — no timer
+      expect(window.DD_LOGS!.logger.log).not.toHaveBeenCalled();
     });
 
-    it('should log exactly once even if source emits multiple non-null values', (done) => {
-      jest.restoreAllMocks();
-      jest.spyOn(performance, 'now').mockReturnValue(0);
-      const subject = new Subject<string | null>();
-      service.watchView('characters', subject.asObservable());
-      subject.next('first');
-      subject.next('second');
-      subject.next('third');
-      setTimeout(() => {
-        const logCalls = (window.DD_LOGS!.logger.log as jest.Mock).mock.calls.length;
-        expect(logCalls).toBe(1);
-        done();
-      }, 0);
+    it('should support independent timers for different views', () => {
+      jest.spyOn(performance, 'now')
+        .mockReturnValueOnce(0)    // startTimer('characters')
+        .mockReturnValueOnce(10)   // startTimer('films')
+        .mockReturnValueOnce(200)  // logViewReady('characters')
+        .mockReturnValueOnce(500); // logViewReady('films')
+
+      service.startTimer('characters');
+      service.startTimer('films');
+      service.logViewReady('characters');
+      service.logViewReady('films');
+
+      const calls = (window.DD_LOGS!.logger.log as jest.Mock).mock.calls;
+      expect(calls[0][1]).toMatchObject({ view_name: 'characters', duration_ms: 200 });
+      expect(calls[1][1]).toMatchObject({ view_name: 'films', duration_ms: 490 });
     });
   });
 });

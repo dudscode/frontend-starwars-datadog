@@ -6,10 +6,13 @@ import { MatButtonModule } from '@angular/material/button';
 import {
   Observable,
   catchError,
+  filter,
   map,
   of,
   shareReplay,
   startWith,
+  take,
+  tap,
 } from 'rxjs';
 import { SwapiService } from '../../core/services/swapi.service';
 import { ObservabilityService } from '../../core/services/observability.service';
@@ -31,7 +34,6 @@ import { FilmDisplayItem, toFilmDisplayItem } from '../../models/film.model';
   styleUrl: './films.component.scss',
 })
 export class FilmsComponent implements OnInit {
-  private readonly viewStart = performance.now();
   private obs = inject(ObservabilityService);
   private swapiService = inject(SwapiService);
 
@@ -53,8 +55,22 @@ export class FilmsComponent implements OnInit {
     startWith<string | null>(null)
   );
 
+  constructor() {
+    // Inicia o timer quando o componente é instanciado pelo Angular.
+    // Para medir desde o clique de navegação, chame startTimer('films')
+    // no guard ou resolver desta rota antes da criação do componente.
+    this.obs.startTimer('films');
+  }
+
   ngOnInit(): void {
-    this.obs.watchView('films', this.films$);
+    // Encerra a medição quando os filmes chegam e a tela está pronta.
+    this.films$
+      .pipe(
+        filter((v): v is FilmDisplayItem[] => v !== null),
+        take(1),
+        tap(() => this.obs.logViewReady('films'))
+      )
+      .subscribe();
   }
 
   retry(): void {

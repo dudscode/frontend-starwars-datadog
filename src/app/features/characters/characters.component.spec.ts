@@ -17,7 +17,7 @@ const mockCharacters: Character[] = Array.from({ length: 25 }, (_, i) => ({
   url: `https://swapi.info/api/people/${i + 1}`,
 }));
 
-const obsMock = { watchView: jest.fn() };
+const obsMock = { startTimer: jest.fn(), logViewReady: jest.fn() };
 
 describe('CharactersComponent', () => {
   let component: CharactersComponent;
@@ -41,7 +41,7 @@ describe('CharactersComponent', () => {
     component = fixture.componentInstance;
   });
 
-  beforeEach(() => { obsMock.watchView.mockClear(); });
+  beforeEach(() => { obsMock.startTimer.mockClear(); obsMock.logViewReady.mockClear(); });
 
   it('should create', () => {
     expect(component).toBeTruthy();
@@ -102,10 +102,18 @@ describe('CharactersComponent', () => {
   });
 
   describe('ObservabilityService integration', () => {
-    it('should call watchView with "characters" and pageView$ in ngOnInit', () => {
-      fixture.detectChanges();
-      expect(obsMock.watchView).toHaveBeenCalledWith('characters', component.pageView$);
+    it('should call startTimer("characters") when component is constructed', () => {
+      // Create a fresh instance after mock is cleared so we capture the constructor call
+      const fresh = TestBed.createComponent(CharactersComponent);
+      expect(obsMock.startTimer).toHaveBeenCalledWith('characters');
+      fresh.destroy();
     });
+
+    it('should call logViewReady("characters") in ngOnInit when data arrives', fakeAsync(() => {
+      fixture.detectChanges();
+      tick();
+      expect(obsMock.logViewReady).toHaveBeenCalledWith('characters');
+    }));
 
     it('should implement OnInit interface', () => {
       expect(typeof component.ngOnInit).toBe('function');

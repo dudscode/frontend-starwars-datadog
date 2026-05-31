@@ -16,10 +16,13 @@ import {
   Observable,
   catchError,
   combineLatest,
+  filter,
   map,
   of,
   shareReplay,
   startWith,
+  take,
+  tap,
 } from 'rxjs';
 import { SwapiService } from '../../core/services/swapi.service';
 import { ObservabilityService } from '../../core/services/observability.service';
@@ -49,7 +52,6 @@ const PAGE_SIZE = 10;
   styleUrl: './characters.component.scss',
 })
 export class CharactersComponent implements OnInit {
-  private readonly viewStart = performance.now();
   private obs = inject(ObservabilityService);
   private swapiService = inject(SwapiService);
 
@@ -86,8 +88,22 @@ export class CharactersComponent implements OnInit {
     startWith<string | null>(null)
   );
 
+  constructor() {
+    // Inicia o timer no momento em que o componente é criado pelo Angular.
+    // Para uma medição ainda mais precisa (desde o clique de navegação),
+    // chame obs.startTimer('characters') no guard ou resolver desta rota.
+    this.obs.startTimer('characters');
+  }
+
   ngOnInit(): void {
-    this.obs.watchView('characters', this.pageView$);
+    // Encerra a medição quando os dados chegam e a tela está pronta para exibir.
+    this.pageView$
+      .pipe(
+        filter((v): v is CharactersPageView => v !== null),
+        take(1),
+        tap(() => this.obs.logViewReady('characters'))
+      )
+      .subscribe();
   }
 
   onPageChange(event: PageEvent): void {
