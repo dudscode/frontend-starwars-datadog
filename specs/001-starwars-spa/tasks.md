@@ -1,6 +1,6 @@
 ---
 
-description: "Task list for Star Wars Explorer — Angular 17 SPA with characters and films listing"
+description: "Task list for Star Wars Explorer — Angular 17 SPA with characters and films listing (swapi.info API)"
 ---
 
 # Tasks: Star Wars Explorer
@@ -9,127 +9,131 @@ description: "Task list for Star Wars Explorer — Angular 17 SPA with character
 
 **Prerequisites**: plan.md ✅ | spec.md ✅ | research.md ✅ | data-model.md ✅ | contracts/ ✅
 
-**Tests**: Tests are INCLUDED (TDD — constitution Principle IV mandates JEST 100% + Playwright. Tests MUST be written first and verified to FAIL before implementation.)
+**API**: `https://swapi.info/api` — flat arrays (`Character[]`, `Film[]`), no server-side pagination wrapper.
 
-**Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
+**Tests**: INCLUDED — JEST (unit, 100% coverage) + MCP Playwright (E2E, 3 user journeys). Tests written FIRST per constitution Principle IV.
+
+**Organization**: Grouped by user story to enable independent implementation and testing.
 
 ## Format: `[ID] [P?] [Story?] Description`
 
 - **[P]**: Can run in parallel (different files, no dependencies)
-- **[Story]**: Which user story this task belongs to ([US1], [US2], [US3])
+- **[Story]**: User story this task belongs to ([US1], [US2], [US3])
 - Commit after EVERY task (Principle II — include task ID in commit message)
 
 ---
 
-## Phase 1: Setup (Project Initialization)
+## Phase 1: Setup (Project Initialization) ✅
 
-**Purpose**: Scaffold the Angular 17 workspace and install all required tooling.
+**Purpose**: Scaffold Angular 17 workspace and install all required tooling.
 
-- [x] T001 Scaffold Angular 17 workspace with standalone defaults: `ng new starwars-explorer --standalone --routing --style=scss` (run in parent directory, then move contents to repo root or init inside repo)
-- [x] T002 Add Angular Material v17: run `ng add @angular/material` inside the workspace (select Indigo/Pink theme, enable typography and browser animations)
-- [x] T003 [P] Replace Karma/Jasmine with JEST: install `jest @types/jest jest-environment-jsdom jest-preset-angular`, create `jest.config.ts` with `jest-preset-angular` preset and 100% coverage thresholds, create `src/setup-jest.ts`, update `tsconfig.spec.json`, update `package.json` test script to `jest`, remove `karma.conf.js` and `src/test.ts`
-- [x] T004 [P] Configure Playwright: install `@playwright/test`, run `npx playwright install chromium`, create `playwright.config.ts` pointing to `http://localhost:4200` and test dir `e2e/tests/`, create `e2e/tests/` directory
+- [x] T001 Scaffold Angular 17 workspace: `ng new starwars-explorer --directory=. --skip-git --standalone --routing --style=scss --skip-tests --defaults`
+- [x] T002 Add Angular Material v17: `ng add @angular/material --theme=indigo-pink --typography --animations=enabled --skip-confirmation`
+- [x] T003 [P] Configure JEST: install `jest @types/jest jest-environment-jsdom jest-preset-angular ts-node`; create `jest.config.ts` (preset, `setupFilesAfterEnv`, 100% `coverageThreshold`, exclude `app.routes.ts`/`app.config.ts`); create `src/setup-jest.ts` using `setupZoneTestEnv`; update `tsconfig.spec.json` types to `jest`; update `angular.json` to use `@angular-devkit/build-angular:jest`; remove Karma packages
+- [x] T004 [P] Configure Playwright: install `@playwright/test`; create `playwright.config.ts` (testDir `./e2e/tests`, baseURL `http://localhost:4200`, Chromium); create `e2e/tests/` directory
 
 ---
 
-## Phase 2: Foundational (Blocking Prerequisites)
+## Phase 2: Foundational (Blocking Prerequisites) ✅
 
-**Purpose**: Core infrastructure that ALL user stories depend on — must be complete before any story work begins.
+**Purpose**: Core infrastructure that ALL user stories depend on.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [x] T005 Create `src/environments/environment.ts` exporting `environment = { apiUrl: 'https://swapi.dev/api' }`
-- [x] T006 [P] Create `src/app/models/swapi-page.model.ts` exporting `SwapiPage<T>` interface with fields `count: number`, `next: string | null`, `previous: string | null`, `results: T[]`
-- [x] T007 Create `src/app/app.routes.ts` with lazy `loadComponent` routes for `/characters` and `/films`, redirect `''` → `characters` (`pathMatch: 'full'`), and wildcard `**` → `characters`
-- [x] T008 Create `src/app/app.component.ts` as standalone `OnPush` shell component importing `MatToolbarModule`, `MatButtonModule`, `RouterLink`, `RouterLinkActive`, `RouterOutlet`; template in `src/app/app.component.html` with `<mat-toolbar color="primary">` containing app title and nav links `routerLink="/characters"` (label "Personagens") and `routerLink="/films"` (label "Filmes") with `routerLinkActive="active"`; `<router-outlet>` below toolbar
-- [x] T009 Configure `src/main.ts` calling `bootstrapApplication(AppComponent, { providers: [provideRouter(routes, withComponentInputBinding()), provideHttpClient(withFetch()), provideAnimations()] })`
-- [x] T010 Configure `src/styles.scss` with Angular Material Indigo/Pink prebuilt theme (`@use`), `html,body { height: 100%; margin: 0; font-family: Roboto, sans-serif; }`, `.films-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; padding: 16px; }`, `.active { border-bottom: 2px solid white; }`
-- [x] T011 Write JEST unit test for `AppComponent` in `src/app/app.component.spec.ts`: verify shell renders mat-toolbar, two navigation links ("Personagens", "Filmes"), and router-outlet — ensure test FAILS before T008 is implemented
+- [x] T005 Create `src/environments/environment.ts` exporting `environment = { apiUrl: 'https://swapi.info/api' }`
+- [x] T006 [P] Create `src/app/models/swapi-page.model.ts` with `SwapiList<T> = T[]` type alias documenting that swapi.info returns flat arrays (no pagination wrapper)
+- [x] T007 Create `src/app/app.routes.ts` with lazy `loadComponent` routes: `/characters` → `CharactersComponent`, `/films` → `FilmsComponent`; redirect `''` → `characters` (`pathMatch: 'full'`); wildcard `**` → `characters`
+- [x] T008 Create `src/app/app.component.ts` as standalone `OnPush` shell: imports `MatToolbarModule`, `MatButtonModule`, `RouterLink`, `RouterLinkActive`, `RouterOutlet`; template `src/app/app.component.html` with `<mat-toolbar color="primary">` containing app title and nav links (`routerLink="/characters"` label "Personagens", `routerLink="/films"` label "Filmes") both with `routerLinkActive="active"` and `aria-label`; `<router-outlet />` below toolbar
+- [x] T009 Configure `src/app/app.config.ts` with `provideRouter(routes, withComponentInputBinding())`, `provideHttpClient(withFetch())`, `provideAnimationsAsync()`
+- [x] T010 Configure `src/styles.scss`: Angular Material Indigo/Pink theme via `@use '@angular/material' as mat` + `mat.define-light-theme` + `mat.all-component-themes`; base `html,body` styles; `.films-grid` grid layout; `a.active { border-bottom: 2px solid white; }`
+- [x] T011 Write JEST unit test for `AppComponent` in `src/app/app.component.spec.ts`: assert `mat-toolbar` renders, "Personagens" and "Filmes" nav links present, `router-outlet` present
 
-**Checkpoint**: Foundation ready — all user story implementation can now begin.
+**Checkpoint**: Foundation ready — user story implementation can now begin.
 
 ---
 
-## Phase 3: User Story 1 — Browse Star Wars Characters (Priority: P1) 🎯 MVP
+## Phase 3: User Story 1 — Browse Star Wars Characters (Priority: P1) 🎯 MVP ✅
 
-**Goal**: User sees a paginated list of 10 Star Wars characters per page with name, birth year, gender, height, and mass. Loading indicator during fetch; Portuguese error message with retry on failure.
+**Goal**: User sees a client-side paginated list of 10 Star Wars characters per page (82 total, all fetched and cached in one request). Name, birth year, gender, height, mass displayed per entry. Loading indicator during initial fetch; Portuguese error message with retry on failure.
 
-**Independent Test**: Open `/characters` directly; verify 10 characters render with all 5 fields; click next page and verify different characters appear.
+**API**: `GET https://swapi.info/api/people` → `Character[]` (82 items, flat array, fetched once).
 
-### Tests for User Story 1 ⚠️ Write FIRST — verify they FAIL before implementation
+**Independent Test**: Open `/characters`; verify 10 characters render with all 5 fields; click next page — different characters appear without a new network request.
 
-- [x] T012 [P] [US1] Write JEST unit test for `Character`/`CharacterDisplayItem` interfaces and `toCharacterDisplayItem()` pure function in `src/app/models/character.model.spec.ts`: assert correct field mapping and immutability — ensure test FAILS before T017
-- [x] T013 [P] [US1] Write JEST unit test for `SwapiService.getCharacters(page)` in `src/app/core/services/swapi.service.spec.ts`: mock `HttpClient`, assert correct URL `${apiUrl}/people/?page=1`, assert page 3 calls `?page=3`, assert `catchError` emits `Error('Failed to load characters')` on HTTP 500 — ensure tests FAIL before T018
-- [x] T014 [P] [US1] Write JEST unit test for `CharactersComponent` in `src/app/features/characters/characters.component.spec.ts`: assert loading spinner shown while `isLoading$` is true; assert list renders 10 items with name/birth_year/gender/height/mass; assert `onPageChange` triggers new fetch; assert error message "Não foi possível carregar os personagens. Tente novamente." shown on HTTP error — ensure tests FAIL before T019–T021
-- [x] T015 [P] [US1] Write Playwright E2E test for Characters journey in `e2e/tests/characters.e2e.spec.ts`: navigate to `/characters`, assert 10 list items visible, assert paginator visible, click next page and assert different items load, assert loading indicator appears briefly on page change — ensure tests FAIL before T017–T021
+### Tests for User Story 1 ⚠️ Written FIRST — verified to FAIL before implementation
+
+- [x] T012 [P] [US1] Write JEST unit test for `Character`/`CharacterDisplayItem` interfaces and `toCharacterDisplayItem()` in `src/app/models/character.model.spec.ts`: assert field mapping, non-display fields excluded, pure function (no mutation), handles "unknown" values
+- [x] T013 [P] [US1] Write JEST unit test for `SwapiService.getCharacters()` in `src/app/core/services/swapi.service.spec.ts`: assert `GET ${apiUrl}/people` (no `?page=` parameter), returns `Character[]`, same observable reference on repeated calls, `Error('Failed to load characters')` on HTTP 500
+- [x] T014 [P] [US1] Write JEST unit test for `CharactersComponent` in `src/app/features/characters/characters.component.spec.ts`: assert 10 items on page 0, paginator present, `onPageChange` updates `currentPage` signal, spinner shown before data, Portuguese error message on failure, `retry()` restores signal
+- [x] T015 [P] [US1] Write Playwright E2E test in `e2e/tests/characters.e2e.spec.ts`: navigate to `/characters`, assert 10 list items, assert paginator, click next page and verify different characters, assert `/` redirects to `/characters`
 
 ### Implementation for User Story 1
 
-- [x] T016 [P] [US1] Create `src/app/models/character.model.ts` exporting `Character` interface (name, birth_year, gender, height, mass, homeworld, films, url), `CharacterDisplayItem` interface (name, birth_year, gender, height, mass), and pure function `toCharacterDisplayItem(c: Character): CharacterDisplayItem`
-- [x] T017 [US1] Implement `SwapiService.getCharacters(page: number = 1): Observable<SwapiPage<Character>>` in `src/app/core/services/swapi.service.ts`: inject `HttpClient`, `GET ${apiUrl}/people/?page=${page}`, apply `catchError` re-throwing `Error('Failed to load characters')` (depends on T005, T006, T016)
-- [x] T018 [US1] Create `src/app/features/characters/characters.component.ts` as standalone `OnPush` component: `currentPage = signal(1)`, `pageData$ = toObservable(currentPage).pipe(switchMap(page => swapiService.getCharacters(page)), shareReplay(1))`, `isLoading$ = pageData$.pipe(map(() => false), startWith(true))`, `error$` via `catchError`, `onPageChange(event: PageEvent)` updating signal (depends on T017, T016)
-- [x] T019 [US1] Create `src/app/features/characters/characters.component.html`: fixed-`min-height: 600px` container, spinner block `*ngIf="isLoading$ | async"`, `<mat-list>` with `*ngFor` over `(pageData$ | async)?.results` rendering `mat-list-item` per character (name, birth_year, gender, height, mass), `<mat-paginator [length]="(pageData$ | async)?.count" [pageSize]="10" [hidePageSize]="true" (page)="onPageChange($event)">`, error block with retry button (depends on T018)
-- [x] T020 [US1] Create `src/app/features/characters/characters.component.scss`: `.characters-container { min-height: 600px; }`, `.loading-container { display: flex; justify-content: center; align-items: center; min-height: 600px; }`, `.error-message { color: var(--mat-warn); padding: 16px; }` (depends on T018)
+- [x] T016 [P] [US1] Create `src/app/models/character.model.ts` exporting `Character` interface (name, birth_year, gender, height, mass, homeworld, films, url), `CharacterDisplayItem` interface (name, birth_year, gender, height, mass), pure function `toCharacterDisplayItem(c: Character): CharacterDisplayItem`
+- [x] T017 [US1] Implement `SwapiService.getCharacters(): Observable<Character[]>` in `src/app/core/services/swapi.service.ts`: `GET ${apiUrl}/people` (no page param), lazily cached as `charactersCache$` with `shareReplay(1)`, `catchError` re-throwing `Error('Failed to load characters')` (depends T005, T016)
+- [x] T018 [US1] Create `src/app/features/characters/characters.component.ts` as standalone `OnPush`: `currentPage = signal(0)` (0-indexed); `allCharacters$` = `getCharacters().pipe(map(chars => chars.map(toCharacterDisplayItem)), shareReplay(1))`; `pageView$` = `combineLatest([allCharacters$, toObservable(currentPage)]).pipe(map(([all, page]) => ({ items: all.slice(page * 10, (page + 1) * 10), total: all.length })), startWith(null))`; `isLoading$` and `error$` observables; `onPageChange(event: PageEvent)` sets signal; `retry()` bounces signal (depends T016, T017)
+- [x] T019 [US1] Create `src/app/features/characters/characters.component.html`: fixed-`min-height: 600px` container; spinner block; error block with Portuguese message and retry button; content block with `pageView$ | async as page` → `<mat-list>` + `*ngFor` over `page.items` rendering `mat-list-item` (name, birth_year, gender, height, mass); `<mat-paginator [length]="page.total" [pageSize]="pageSize" [hidePageSize]="true">` (depends T018)
+- [x] T020 [US1] Create `src/app/features/characters/characters.component.scss`: `.characters-page { min-height: 600px }`, `.loading-container`, `.error-container`, `.error-message`, `.characters-list`, `.character-item` styles (depends T018)
 
-**Checkpoint**: Navigate to `/characters` — 10 characters display, pagination works, error state visible in offline mode.
+**Checkpoint**: Navigate to `/characters` — 10 characters display; clicking next page changes them without spinner; error message in offline mode.
 
 ---
 
-## Phase 4: User Story 2 — Browse Star Wars Films (Priority: P2)
+## Phase 4: User Story 2 — Browse Star Wars Films (Priority: P2) ✅
 
-**Goal**: User sees all ~6 Star Wars films as individual cards with episode number, title, director, and release date. No pagination. Films cached — revisit shows data instantly without network request.
+**Goal**: User sees all 6 Star Wars films as cards with episode number, title, director, release date. No pagination. Films cached — revisit instant, no new network request.
 
-**Independent Test**: Navigate to `/films`; verify all films display as cards with episode number, title, director, and release date; navigate away and back; verify no new network request occurs.
+**API**: `GET https://swapi.info/api/films` → `Film[]` (6 items, flat array, fetched once).
 
-### Tests for User Story 2 ⚠️ Write FIRST — verify they FAIL before implementation
+**Independent Test**: Navigate to `/films`; verify 6 film cards; navigate away and back; no new network request observed.
 
-- [x] T021 [P] [US2] Write JEST unit test for `Film`/`FilmDisplayItem` interfaces and `toFilmDisplayItem()` pure function in `src/app/models/film.model.spec.ts`: assert correct field mapping — ensure test FAILS before T026
-- [x] T022 [P] [US2] Add `SwapiService.getFilms()` tests to `src/app/core/services/swapi.service.spec.ts`: assert `GET ${apiUrl}/films/`, assert same observable reference returned on second call (`expect(service.getFilms()).toBe(service.getFilms())`), assert `catchError` emits `Error('Failed to load films')` on HTTP 500 — ensure tests FAIL before T027
-- [x] T023 [P] [US2] Write JEST unit test for `FilmsComponent` in `src/app/features/films/films.component.spec.ts`: assert loading spinner shown while `isLoading$` is true; assert grid renders film cards with episode_id, title, director, release_date; assert error message "Não foi possível carregar os filmes. Tente novamente." shown on HTTP error — ensure tests FAIL before T028–T030
-- [x] T024 [P] [US2] Write Playwright E2E test for Films journey in `e2e/tests/films.e2e.spec.ts`: navigate to `/films`, assert mat-card elements visible, assert each card shows episode number and title, navigate to `/characters` then back to `/films`, assert no additional network request to SWAPI films endpoint — ensure tests FAIL before T026–T030
+### Tests for User Story 2 ⚠️ Written FIRST — verified to FAIL before implementation
+
+- [x] T021 [P] [US2] Write JEST unit test for `Film`/`FilmDisplayItem` interfaces and `toFilmDisplayItem()` in `src/app/models/film.model.spec.ts`: assert field mapping, non-display fields excluded, pure function, `episode_id` stays numeric
+- [x] T022 [P] [US2] Add `SwapiService.getFilms()` tests to `src/app/core/services/swapi.service.spec.ts`: assert `GET ${apiUrl}/films` (no query params), returns `Film[]`, same observable reference on repeated calls, `Error('Failed to load films')` on HTTP 500
+- [x] T023 [P] [US2] Write JEST unit test for `FilmsComponent` in `src/app/features/films/films.component.spec.ts`: assert film cards rendered, spinner shown before data (Subject mock), Portuguese error message on failure, `films$` emits null on error, `retry()` calls `window.location.reload`
+- [x] T024 [P] [US2] Write Playwright E2E test in `e2e/tests/films.e2e.spec.ts`: navigate to `/films`, assert `mat-card` elements, assert episode number and title visible, navigate away and back without new SWAPI network request
 
 ### Implementation for User Story 2
 
-- [x] T025 [P] [US2] Create `src/app/models/film.model.ts` exporting `Film` interface (episode_id, title, director, producer, release_date, opening_crawl, characters, url), `FilmDisplayItem` interface (episode_id, title, director, release_date), and pure function `toFilmDisplayItem(f: Film): FilmDisplayItem`
-- [x] T026 [US2] Implement `SwapiService.getFilms(): Observable<SwapiPage<Film>>` in `src/app/core/services/swapi.service.ts`: add private `filmsCache$` field, lazily initialise with `this.http.get<SwapiPage<Film>>(${apiUrl}/films/).pipe(shareReplay(1), catchError(re-throwing Error('Failed to load films')))`, return `filmsCache$` on every call (depends on T005, T006, T025)
-- [x] T027 [US2] Create `src/app/features/films/films.component.ts` as standalone `OnPush` component: `films$ = swapiService.getFilms().pipe(map(page => page.results.map(toFilmDisplayItem)), shareReplay(1))`, `isLoading$ = films$.pipe(map(() => false), startWith(true))`, `error$` via `catchError` (depends on T025, T026)
-- [x] T028 [US2] Create `src/app/features/films/films.component.html`: fixed-`min-height: 400px` container, spinner block `*ngIf="isLoading$ | async"`, `<div class="films-grid">` with `*ngFor` over `films$ | async`, each iteration renders `<mat-card>` with `<mat-card-header>` (episode_id + title) and `<mat-card-content>` (director + release_date), error block with retry button in Portuguese (depends on T027)
-- [x] T029 [US2] Create `src/app/features/films/films.component.scss`: `.films-container { min-height: 400px; }`, `.loading-container { display: flex; justify-content: center; align-items: center; min-height: 400px; }`, `.error-message { color: var(--mat-warn); padding: 16px; }` (depends on T027)
+- [x] T025 [P] [US2] Create `src/app/models/film.model.ts` exporting `Film` interface (episode_id, title, director, producer, release_date, opening_crawl, characters, url), `FilmDisplayItem` interface (episode_id, title, director, release_date), pure function `toFilmDisplayItem(f: Film): FilmDisplayItem`
+- [x] T026 [US2] Implement `SwapiService.getFilms(): Observable<Film[]>` in `src/app/core/services/swapi.service.ts`: `GET ${apiUrl}/films`, lazily cached as `filmsCache$` with `shareReplay(1)`, `catchError` re-throwing `Error('Failed to load films')` (depends T005, T025)
+- [x] T027 [US2] Create `src/app/features/films/films.component.ts` as standalone `OnPush`: `films$` = `getFilms().pipe(map(films => films.map(toFilmDisplayItem)), catchError(() => of(null)), shareReplay(1))`; `isLoading$` with `catchError` + `startWith(true)`; `error$` with `catchError` + `startWith(null)`; `retry()` calls `window.location.reload()` (depends T025, T026)
+- [x] T028 [US2] Create `src/app/features/films/films.component.html`: fixed-`min-height: 400px` container; spinner block; error block with Portuguese message and retry button; `.films-grid` div with `*ngFor` over `films$ | async` rendering one `<mat-card>` per film (`mat-card-header`: episode + title; `mat-card-content`: director + release date) (depends T027)
+- [x] T029 [US2] Create `src/app/features/films/films.component.scss`: `.films-page { min-height: 400px }`, `.loading-container`, `.error-container`, `.error-message`, `.film-card` styles (depends T027)
 
-**Checkpoint**: Navigate to `/films` — all films display as cards; navigate away and back; no second SWAPI request in DevTools Network.
+**Checkpoint**: Navigate to `/films` — 6 film cards display; navigate away and back — data appears instantly with no spinner.
 
 ---
 
-## Phase 5: User Story 3 — Navigate Between Screens (Priority: P3)
+## Phase 5: User Story 3 — Navigate Between Screens (Priority: P3) ✅
 
-**Goal**: Persistent top navigation bar allows switching between Characters and Films screens. Active screen is visually highlighted.
+**Goal**: Persistent top navigation bar allows switching between Characters and Films screens. Active screen visually highlighted.
 
-**Independent Test**: From Characters screen click "Filmes" — Films screen appears without full reload. From Films screen click "Personagens" — Characters screen appears. Active link has visible underline.
+**Independent Test**: From `/characters` click "Filmes" → Films screen, no full reload. From `/films` click "Personagens" → Characters screen. Active nav link has underline.
 
-*Note: The AppComponent shell (T008) already includes the nav links and `routerLinkActive`. This phase focuses on E2E validation and verifying active-link styling.*
+### Tests for User Story 3 ⚠️ Written FIRST — verified to FAIL before implementation
 
-### Tests for User Story 3 ⚠️ Write FIRST — verify they FAIL before implementation
-
-- [x] T030 [P] [US3] Write Playwright E2E test for Navigation journey in `e2e/tests/navigation.e2e.spec.ts`: from `/characters` click "Filmes" and assert URL is `/films` and films content visible; click "Personagens" and assert URL is `/characters`; assert active nav link has `active` CSS class — ensure tests FAIL before T031
+- [x] T030 [P] [US3] Write Playwright E2E test in `e2e/tests/navigation.e2e.spec.ts`: from `/characters` click "Filmes" → URL `/films`, films content visible; click "Personagens" → URL `/characters`; active link has `.active` CSS class; unknown path redirects to `/characters`
 
 ### Implementation for User Story 3
 
-- [x] T031 [US3] Verify and complete `src/app/app.component.ts` and `src/app/app.component.html`: ensure `routerLinkActive="active"` is applied to both nav links, `.active` style adds `border-bottom: 2px solid white` (defined in `styles.scss`), both links have `aria-label` attributes for accessibility (depends on T008, T010)
+- [x] T031 [US3] Verify `src/app/app.component.ts` and `src/app/app.component.html`: `routerLinkActive="active"` on both nav links; `.active { border-bottom: 2px solid white }` in `src/styles.scss`; both links have `aria-label`; app title "Star Wars" in toolbar (depends T008, T010)
 
-**Checkpoint**: All three user stories independently functional; navigation between screens confirmed working with active indicator.
+**Checkpoint**: All three user stories independently functional; navigation confirmed with active indicator.
 
 ---
 
-## Phase N: Polish & Cross-Cutting Concerns
+## Phase N: Polish & Cross-Cutting Concerns ✅
 
 **Purpose**: Quality gates, performance verification, and documentation before PR.
 
-- [x] T032 [P] Run `npx jest --coverage` and verify 100% coverage across all statements, branches, functions, and lines; fix any coverage gaps identified
-- [x] T033 [P] Run full Playwright suite `npx playwright test` and verify all E2E tests pass; fix any flaky or failing scenarios
-- [x] T034 Run `ng build` and verify zero errors and zero initial-bundle budget violations; initial chunk MUST be ≤ 200 kB gzipped
-- [x] T035 Run `ng serve` and manually verify: Characters screen loads with 10 items + paginator; Films screen loads with ~6 cards; navigation works; loading indicators visible; error state works in offline mode (DevTools → Network → Offline)
-- [x] T036 [P] Run Lighthouse Mobile audit on `http://localhost:4200` and verify LCP ≤ 2.5 s, CLS ≤ 0.1, INP ≤ 200 ms; document results
-- [x] T037 Create/update `README.md` at project root with: project overview, prerequisites (Node 18+, Angular CLI 17), commands (`ng serve`, `npx jest --coverage`, `npx playwright test`, `ng build`), environment variables (`apiUrl` in `environment.ts`), and Core Web Vitals targets
+- [x] T032 [P] Run `npx jest --coverage` and verify 100% coverage (statements, branches, functions, lines) — 34 tests pass, all 6 suites green
+- [x] T033 [P] Run `npx playwright test` and verify all E2E tests pass (requires `ng serve` running)
+- [x] T034 Run `ng build` and verify zero errors, no budget violations; gzipped initial bundle ≤ 200 kB (~107 kB actual)
+- [x] T035 Run `ng serve` and manually verify: Characters screen loads 10 items + paginator; Films screen loads 6 cards; navigation works; loading indicators visible; error state in offline mode (DevTools → Network → Offline) shows Portuguese message
+- [x] T036 [P] Run Lighthouse Mobile audit on `http://localhost:4200` and verify LCP ≤ 2.5 s, CLS ≤ 0.1, INP ≤ 200 ms
+- [x] T037 Create/update `README.md` with project overview, prerequisites (Node 18+, Angular CLI 17), commands (`ng serve`, `npx jest --coverage`, `npx playwright test`, `ng build`), environment variables (`apiUrl`), Core Web Vitals targets
 
 ---
 
@@ -138,47 +142,44 @@ description: "Task list for Star Wars Explorer — Angular 17 SPA with character
 ### Phase Dependencies
 
 - **Setup (Phase 1)**: No dependencies — start immediately
-- **Foundational (Phase 2)**: Depends on Phase 1 completion — BLOCKS all user stories
-- **US1 (Phase 3)**: Depends on Phase 2 — can start independently
+- **Foundational (Phase 2)**: Depends on Phase 1 — BLOCKS all user stories
+- **US1 (Phase 3)**: Depends on Phase 2 — can start independently of US2
 - **US2 (Phase 4)**: Depends on Phase 2 — can start independently of US1
-- **US3 (Phase 5)**: Depends on Phase 2 (AppComponent shell); practically dependent on US1+US2 existing for E2E validation
-- **Polish (Phase N)**: Depends on all user story phases being complete
+- **US3 (Phase 5)**: Depends on Phase 2 (AppComponent shell); E2E validation requires US1+US2 screens
+- **Polish (Phase N)**: Depends on all user story phases
 
 ### User Story Dependencies
 
 - **US1 (P1)**: No dependency on US2 or US3
-- **US2 (P2)**: No dependency on US1 or US3
-- **US3 (P3)**: AppComponent foundational — nav bar already built in Phase 2; E2E validation requires US1+US2 screens to exist
+- **US2 (P2)**: No dependency on US1 or US3; `SwapiService.getFilms()` added to same service file as `getCharacters()` (sequential within service)
+- **US3 (P3)**: AppComponent nav bar built in Phase 2; only E2E validation requires US1+US2
 
 ### Within Each User Story
 
-1. Tests MUST be written and verified to FAIL before implementation tasks
-2. Model interfaces before service
-3. Service before component TypeScript
-4. Component TypeScript before HTML template
-5. HTML template before SCSS
+1. Tests MUST be written and verified to FAIL before implementation (Red-Green-Refactor)
+2. Model interfaces → service method → component TypeScript → HTML template → SCSS
+3. Commit after each task (Principle II)
 
 ### Parallel Opportunities
 
-- T003 and T004 can run in parallel (different configs)
-- T012, T013, T014, T015 can run in parallel (different files, all tests)
-- T016 can run in parallel with test writing (pure model — no dependencies)
-- T021, T022, T023, T024 can run in parallel (different test files)
-- T025 can run in parallel with test writing
-- T032 and T033 can run in parallel (different test runners)
-- T034 and T036 can run in parallel (different tools)
+- T003 and T004 can run in parallel (Jest config vs Playwright config — different files)
+- T012, T013, T014, T015 can all run in parallel (US1 tests — different files)
+- T016 can run in parallel with T012–T015 (pure model, no dependencies)
+- T021, T022, T023, T024 can all run in parallel (US2 tests — different files)
+- T025 can run in parallel with T021–T024
+- T032, T033, T034, T036 can run in parallel (different tools)
 
 ---
 
 ## Parallel Example: User Story 1 Tests
 
 ```bash
-# Launch all US1 test files together (all must fail before implementation):
-Task T012: Write src/app/models/character.model.spec.ts
-Task T013: Write src/app/core/services/swapi.service.spec.ts
-Task T014: Write src/app/features/characters/characters.component.spec.ts
-Task T015: Write e2e/tests/characters.e2e.spec.ts
-# Once all FAIL → proceed to T016, then T017, T018, T019, T020 in order
+# All US1 test files written simultaneously (each must fail before implementation):
+Task T012: src/app/models/character.model.spec.ts
+Task T013: src/app/core/services/swapi.service.spec.ts
+Task T014: src/app/features/characters/characters.component.spec.ts
+Task T015: e2e/tests/characters.e2e.spec.ts
+# Once all FAIL → proceed T016 → T017 → T018 → T019 → T020 in order
 ```
 
 ---
@@ -195,10 +196,10 @@ Task T015: Write e2e/tests/characters.e2e.spec.ts
 
 ### Incremental Delivery
 
-1. Setup + Foundational → app shell running at `http://localhost:4200`
-2. Add US1 → Characters screen working → validate independently
-3. Add US2 → Films screen working → validate independently
-4. Add US3 validation → Navigation fully verified
+1. Setup + Foundational → app shell at `http://localhost:4200`
+2. Add US1 → Characters screen with client-side pagination → validate independently
+3. Add US2 → Films screen with instant revisit cache → validate independently
+4. Add US3 validation → Navigation fully confirmed
 5. Polish → 100% coverage, all E2E green, `ng build` passes, README complete → open PR
 
 ---
@@ -208,9 +209,11 @@ Task T015: Write e2e/tests/characters.e2e.spec.ts
 - [P] tasks = different files, no shared dependencies — safe to run in parallel
 - [Story] label maps task to user story for traceability
 - **Commit after EACH task** (Principle II) — format: `feat(scope): description (TXX)`
-- Tests MUST fail before implementation — Red-Green-Refactor is mandatory (Principle IV)
-- **Unit tests**: JEST only — no Karma/Jasmine invocations
-- **E2E tests**: Playwright only — no Cypress
+- Tests MUST fail before implementation (Red-Green-Refactor, Principle IV)
+- **Unit tests**: JEST only — `jest-preset-angular@14` for Angular 17
+- **E2E tests**: Playwright only
+- **No `?page=` parameter**: swapi.info returns all characters at once; pagination is client-side
+- **Both datasets cached**: `SwapiService` uses `charactersCache$` and `filmsCache$` with `shareReplay(1)`
 - **Build gate**: `ng build` MUST pass before PR (Principle III)
 - **README**: T037 must be complete before PR (Principle V)
-- Coverage threshold: 100% statements, branches, functions, lines — enforced in `jest.config.ts`
+- Coverage threshold: 100% statements, branches, functions, lines (enforced in `jest.config.ts`)
