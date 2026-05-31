@@ -14,6 +14,15 @@ export class ObservabilityService {
   }
 
   log(payload: LogPayload): void {
+    const consoleFn =
+      payload.severity === 'error'
+        ? console.error
+        : payload.severity === 'warning'
+        ? console.warn
+        : console.log;
+
+    consoleFn('[DD]', payload.event_type, payload);
+
     if (!window.DD_LOGS) return;
     const level =
       payload.severity === 'error'
@@ -31,6 +40,17 @@ export class ObservabilityService {
       .subscribe(() => {
         const duration_ms = Math.round(performance.now() - start);
         const exceeded = duration_ms > LATENCY_THRESHOLD_MS;
+
+        const label = exceeded
+          ? `⚠️ [DD] render LENTO: ${viewName} — ${duration_ms} ms (> ${LATENCY_THRESHOLD_MS} ms)`
+          : `✅ [DD] render OK: ${viewName} — ${duration_ms} ms`;
+
+        if (exceeded) {
+          console.warn(label);
+        } else {
+          console.log(label);
+        }
+
         this.log({
           event_type: exceeded ? 'latency' : 'render_complete',
           severity: exceeded ? 'warning' : 'info',

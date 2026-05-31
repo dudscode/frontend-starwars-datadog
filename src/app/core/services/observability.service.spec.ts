@@ -10,8 +10,15 @@ describe('ObservabilityService', () => {
   let service: ObservabilityService;
 
   beforeEach(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => {});
     TestBed.configureTestingModule({});
     service = TestBed.inject(ObservabilityService);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   describe('constructor — global context setup', () => {
