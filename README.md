@@ -96,16 +96,19 @@ Verificar com Lighthouse: DevTools → Lighthouse → Mobile → Analyze page lo
 
 ### Visão Geral
 
-A aplicação instrumenta o **Datadog Browser Logs SDK** (`window.DD_LOGS`) para capturar quatro categorias de eventos em produção:
+A aplicação instrumenta o **Datadog Browser Logs SDK** (`window.DD_LOGS`) para capturar cinco categorias de eventos em produção:
 
-| Categoria | `event_type` | Origem |
-|-----------|-------------|--------|
-| Tela carregada dentro do SLA | `render_complete` | Componente — `logViewReady()` |
-| Tela carregada acima do SLA | `latency` | Componente — `logViewReady()` |
-| Falha em requisição HTTP | `request_error` | `DdLogsInterceptor` |
-| Erro JavaScript não tratado | `js_error` | `GlobalErrorHandler` + listener `unhandledrejection` |
+| `event_type` | `severity` | Origem | Quando |
+|---|---|---|---|
+| `render_complete` | `info` | Componente — `logViewReady()` | Dados chegaram em ≤ 5 s |
+| `latency` | `warning` | Componente — `logViewReady()` | Dados chegaram em > 5 s |
+| `timer_lost` | `error` | `ObservabilityService` interno | `logViewReady()` nunca chamado em 1 min |
+| `request_error` | `error` | `DdLogsInterceptor` | Falha HTTP |
+| `js_error` | `error` | `GlobalErrorHandler` + `unhandledrejection` | Erro JavaScript não tratado |
 
-O objetivo é alimentar um **monitor de rollback automático de canary**: comparando `deploy_type: canary` contra `deploy_type: stable` em métricas de latência e taxa de erros.
+> **`latency` ≠ `timer_lost`**: `latency` = dados chegaram devagar. `timer_lost` = dados **nunca chegaram** dentro de 1 minuto.
+
+O objetivo é alimentar um **monitor de rollback automático de canary**: comparando `deploy_type: canary` contra `deploy_type: stable` em métricas de latência, erros e timers perdidos.
 
 > **Regra de ouro:** `window.DD_LOGS` é inicializado pela equipe de infraestrutura via script externo no `<head>`. A aplicação **nunca** chama `DD_LOGS.init()` — apenas usa `setGlobalContextProperty` e `logger.log`.
 
@@ -145,11 +148,12 @@ Todas as chamadas a `log()` respeitam o mesmo contrato definido em `src/app/core
 
 ```typescript
 interface LogPayload {
-  event_type: 'render_complete' | 'latency' | 'request_error' | 'js_error'; // obrigatório
-  severity:   'info' | 'warning' | 'error';                                  // obrigatório
+  event_type: 'render_complete' | 'latency' | 'timer_lost'  // obrigatório
+            | 'request_error'  | 'js_error';
+  severity:   'info' | 'warning' | 'error';                 // obrigatório
   view_name?:          string;   // nome da tela, ex: 'characters', 'films'
-  duration_ms?:        number;   // tempo de renderização em ms (inteiro)
-  threshold_exceeded?: boolean;  // true quando duration_ms > 5000
+  duration_ms?:        number;   // tempo em ms (inteiro): desde startTimer até logViewReady ou timeout
+  threshold_exceeded?: boolean;  // true se duration_ms > 5 000; sempre true para timer_lost
   http_status?:        number;   // código HTTP, 0 = erro de rede/CORS
   endpoint?:           string;   // URL da requisição que falhou
   error_message?:      string;   // mensagem do erro
@@ -191,35 +195,52 @@ Os valores de `appVersion` e `deployType` vêm de `environment.ts`, que é popul
 
 #### `startTimer(viewName: string)`
 
-Marca o início da medição de uma tela. Armazena `performance.now()` em um `Map` interno indexado por `viewName`.
+Marca o início da medição e arma um timeout automático de **1 minuto**.
 
 ```typescript
 obs.startTimer('characters');
 // Console: [DD] ⏱ timer iniciado: characters
 ```
 
-Chame no **constructor** do componente para capturar desde a instanciação pelo Angular. Para medir desde o clique de navegação, chame em um route guard antes da criação do componente.
+Internamente, guarda `performance.now()` e um `setTimeout(60 000)` em dois `Map`s separados, indexados por `viewName`. Múltiplas telas podem ter timers rodando em paralelo sem interferência.
+
+- **Re-navegação** para a mesma tela: cancela o timeout anterior via `clearTimeout` e inicia novo ciclo.
+- **Se `logViewReady` não for chamado em 1 min**: o timeout dispara `_fireTimerLost()`, que envia `timer_lost` ao Datadog e remove o timer do `Map`.
 
 #### `logViewReady(viewName: string)`
 
-Encerra a medição, calcula a duração e envia o evento ao Datadog. Remove o timer do `Map` — uma segunda chamada sem um `startTimer` prévio emite `console.warn` e não envia nada.
+Encerra o timer e envia o evento de latência. Cancela o timeout automático antes de calcular a duração.
 
 ```typescript
 obs.logViewReady('characters');
-// Se duration <= 5000ms:
+// Se duration ≤ 5 000 ms:
 //   Console: [DD] ✅ render OK: characters — 287 ms
 //   Datadog: event_type=render_complete, severity=info, threshold_exceeded=false
 //
-// Se duration > 5000ms:
-//   Console: [DD] ⚠️ render LENTO: characters — 6234 ms (> 5000 ms)
+// Se duration > 5 000 ms (dados chegaram, mas devagar):
+//   Console: [DD] ⚠️ render LENTO: characters — 6 234 ms (> 5 000 ms)
 //   Datadog: event_type=latency, severity=warning, threshold_exceeded=true
 ```
 
-**Por que usar `logViewReady` no observable e não em `ngAfterViewInit`?**
+Retorno silencioso se o timer já foi encerrado (timeout disparou ou chamada duplicada de `ngOnDestroy`). Isso é deliberado: `ngOnDestroy` sempre chama `logViewReady` como garantia de fechamento — sem double-log.
 
-`ngAfterViewInit` dispara quando o DOM do componente é montado — mas os dados ainda não chegaram. Nesse ponto a tela mostra um spinner. A medição correta do tempo de renderização é o intervalo entre a criação do componente e o momento em que os dados ficam visíveis. Isso corresponde à **primeira emissão não-nula** do observable de dados.
+**Por que no observable e não em `ngAfterViewInit`?** `ngAfterViewInit` dispara ao montar o DOM do spinner — antes dos dados. A medição correta é o intervalo entre a criação do componente e a **primeira emissão não-nula** do observable de dados.
 
-Timers independentes por tela são suportados: chamar `startTimer('characters')` e `startTimer('films')` em paralelo funciona corretamente.
+#### `_fireTimerLost(viewName)` (privado — auto-timeout)
+
+Chamado internamente pelo `setTimeout` de 1 min quando `logViewReady` nunca chegou. Envia `timer_lost` com `severity: 'error'` — indica que os dados nunca chegaram, não que chegaram devagar.
+
+```
+[DD] ❌ timer perdido: characters — dados não chegaram em 60 001 ms
+→ Datadog: event_type=timer_lost, severity=error, threshold_exceeded=true
+```
+
+| Constante | Valor | Uso |
+|-----------|-------|-----|
+| `LATENCY_THRESHOLD_MS` | 5 000 ms | Threshold para `latency` vs `render_complete` |
+| `TIMER_LOST_TIMEOUT_MS` | 60 000 ms | Prazo antes de disparar `timer_lost` |
+
+Timers de telas diferentes são independentes: `startTimer('characters')` e `startTimer('films')` coexistem sem interferência.
 
 #### `log(payload: LogPayload)`
 
@@ -348,41 +369,61 @@ bootstrapApplication(AppComponent, appConfig)
 
 ### Como instrumentar uma nova tela
 
-Erros HTTP e JS são capturados automaticamente. Só é necessário instrumentar a **latência de renderização**:
+Erros HTTP e JS são capturados automaticamente pelo interceptor e pelo error handler. Só é necessário instrumentar a **latência de renderização**:
 
 ```typescript
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, DestroyRef, OnDestroy, OnInit, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter, take, tap } from 'rxjs';
 import { ObservabilityService } from '../core/services/observability.service';
 
 @Component({ ... })
-export class MinhaTelaComponent implements OnInit {
+export class MinhaTelaComponent implements OnInit, OnDestroy {
   private obs = inject(ObservabilityService);
+  private destroyRef = inject(DestroyRef);
 
-  // Dados da tela — observable que emite null enquanto carrega
+  // Observable que emite null enquanto carrega, depois os dados
   dados$ = this.meuService.getDados().pipe(shareReplay(1));
 
   constructor() {
-    // Inicia o timer quando o Angular cria o componente.
-    // Para medir desde o clique de navegação, mova esta chamada
-    // para um CanActivate guard desta rota.
+    // startTimer inicia o timer E arma o auto-timeout de 1 min.
+    // Para medir desde o clique de navegação, mova para um CanActivate guard.
     this.obs.startTimer('minha-tela');
   }
 
   ngOnInit(): void {
-    // Encerra o timer quando os dados chegam e a tela está visível.
+    // Encerra o timer quando os dados chegam (caminho normal).
+    // takeUntilDestroyed cancela a subscription se o componente for destruído
+    // antes dos dados chegarem — sem subscription órfã.
     this.dados$
       .pipe(
         filter((v) => v !== null),
         take(1),
-        tap(() => this.obs.logViewReady('minha-tela'))
+        tap(() => this.obs.logViewReady('minha-tela')),
+        takeUntilDestroyed(this.destroyRef)
       )
       .subscribe();
+  }
+
+  ngOnDestroy(): void {
+    // Garante encerramento mesmo que os dados nunca tenham chegado
+    // (usuário saiu antes, erro de rede). Se logViewReady já foi chamado
+    // pelo tap() acima, esta chamada retorna silenciosamente.
+    this.obs.logViewReady('minha-tela');
   }
 }
 ```
 
 > O `view_name` deve ser o **path da rota** em lowercase (ex: `'characters'`, `'films'`, `'dashboard'`). Isso alinha com os facets do dashboard Datadog.
+
+**O que acontece em cada cenário após `startTimer`:**
+
+| Cenário | Como encerra | `event_type` enviado |
+|---------|-------------|---------------------|
+| Dados chegam em ≤ 5 s | `tap()` → `logViewReady` | `render_complete` |
+| Dados chegam em > 5 s | `tap()` → `logViewReady` | `latency` |
+| Usuário sai antes dos dados chegarem | `ngOnDestroy()` → `logViewReady` | `render_complete` ou `latency` |
+| Dados nunca chegam em 1 min | auto-timeout → `_fireTimerLost` | `timer_lost` |
 
 ---
 
@@ -392,11 +433,15 @@ Sem conta Datadog, todos os eventos aparecem no console do browser:
 
 ```
 [DD] ⏱ timer iniciado: characters
+
 [DD] ✅ render OK: characters — 287 ms
     → Datadog: event_type=render_complete, severity=info, duration_ms=287, threshold_exceeded=false
 
-[DD] ⚠️ render LENTO: films — 6034 ms (> 5000 ms)
+[DD] ⚠️ render LENTO: films — 6 034 ms (> 5 000 ms)
     → Datadog: event_type=latency, severity=warning, duration_ms=6034, threshold_exceeded=true
+
+[DD] ❌ timer perdido: characters — dados não chegaram em 60 001 ms
+    → Datadog: event_type=timer_lost, severity=error, threshold_exceeded=true
 
 [DD] request_error { http_status: 0, endpoint: 'https://swapi.info/api/people', ... }
     → Datadog: event_type=request_error, severity=error
@@ -480,7 +525,7 @@ src/app/
 ├── core/
 │   ├── services/
 │   │   ├── swapi.service.ts          # Único ponto de acesso à SWAPI
-│   │   └── observability.service.ts  # Facade DD_LOGS — startTimer, logViewReady, log
+│   │   └── observability.service.ts  # Facade DD_LOGS — startTimer, logViewReady, log, timer_lost
 │   ├── interceptors/
 │   │   └── dd-logs.interceptor.ts    # Captura erros HTTP (request_error)
 │   ├── handlers/
