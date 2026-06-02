@@ -164,4 +164,80 @@ describe('ObservabilityService', () => {
       expect(calls[1][1]).toMatchObject({ view_name: 'films', duration_ms: 490 });
     });
   });
+
+  describe('auto-timeout — disparo automático após 5 s', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+      jest.restoreAllMocks();
+    });
+
+    it('should fire logViewReady automatically after LATENCY_THRESHOLD_MS', () => {
+      jest.spyOn(performance, 'now')
+        .mockReturnValueOnce(0)     // startTimer: marca o início
+        .mockReturnValueOnce(5001); // logViewReady auto: calcula duração
+      service.startTimer('characters');
+
+      jest.advanceTimersByTime(5000);
+
+      expect(window.DD_LOGS!.logger.log).toHaveBeenCalledWith(
+        'latency',
+        expect.objectContaining({
+          event_type: 'latency',
+          severity: 'warning',
+          view_name: 'characters',
+          threshold_exceeded: true,
+        }),
+        'warn'
+      );
+    });
+
+    it('should NOT double-log if logViewReady is called before the timeout', () => {
+      jest.spyOn(performance, 'now')
+        .mockReturnValueOnce(0)    // startTimer
+        .mockReturnValueOnce(300); // logViewReady
+
+      service.startTimer('characters');
+      service.logViewReady('characters'); // cancels the timeout
+
+      jest.advanceTimersByTime(5000); // timeout would have fired here
+
+      expect((window.DD_LOGS!.logger.log as jest.Mock).mock.calls.length).toBe(1);
+      expect(window.DD_LOGS!.logger.log).toHaveBeenCalledWith(
+        'render_complete', expect.anything(), 'info'
+      );
+    });
+
+    it('should emit a new timeout if startTimer is called again for the same view', () => {
+      jest.spyOn(performance, 'now').mockReturnValue(0);
+      service.startTimer('characters');
+
+      jest.advanceTimersByTime(3000); // not yet expired
+      service.startTimer('characters'); // re-navigação: reseta o timer
+
+      jest.advanceTimersByTime(3000); // 3s do novo timer — ainda não expirou
+
+      expect(window.DD_LOGS!.logger.log).not.toHaveBeenCalled();
+
+      jest.advanceTimersByTime(2000); // completa 5s do novo timer
+
+      expect(window.DD_LOGS!.logger.log).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not double-log when ngOnDestroy calls logViewReady after auto-timeout already fired', () => {
+      jest.spyOn(performance, 'now').mockReturnValue(0);
+      service.startTimer('characters');
+
+      jest.advanceTimersByTime(5000); // auto-timeout fires
+      expect((window.DD_LOGS!.logger.log as jest.Mock).mock.calls.length).toBe(1);
+
+      service.logViewReady('characters'); // ngOnDestroy chama depois
+      expect((window.DD_LOGS!.logger.log as jest.Mock).mock.calls.length).toBe(1); // ainda 1
+    });
+  });
 });
