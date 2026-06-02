@@ -1,4 +1,9 @@
-export type EventType = 'latency' | 'request_error' | 'js_error' | 'render_complete';
+export type EventType =
+  | 'render_complete' // tela carregou dentro do SLA (≤ 5 s)
+  | 'latency'        // tela carregou mas ultrapassou o SLA (> 5 s), dados chegaram
+  | 'timer_lost'     // timeout automático: dados nunca chegaram em 5 s
+  | 'request_error'  // falha HTTP
+  | 'js_error';      // erro JavaScript não tratado
 
 export type Severity = 'info' | 'warning' | 'error';
 

@@ -6,7 +6,17 @@ const LATENCY_THRESHOLD_MS = 5000;
 
 @Injectable({ providedIn: 'root' })
 export class ObservabilityService {
+  /**
+   * Armazena o timestamp de início de cada timer ativo, indexado por viewName.
+   * Múltiplos timers podem existir em simultâneo (ex: navegação rápida entre telas).
+   */
   private timers = new Map<string, number>();
+
+  /**
+   * Armazena o ID do setTimeout de cada timer ativo, indexado por viewName.
+   * Necessário para cancelar o timeout quando logViewReady() for chamado antes
+   * dos 5 s — evita que o auto-fire dispare depois que o timer já foi encerrado.
+   */
   private timeoutIds = new Map<string, ReturnType<typeof window.setTimeout>>();
 
   constructor() {
@@ -16,20 +26,23 @@ export class ObservabilityService {
   }
 
   /**
-   * Marca o início da medição de uma tela e arma um timeout automático.
+   * Inicia um timer de renderização para a tela indicada.
    *
-   * Se logViewReady() não for chamado em LATENCY_THRESHOLD_MS (5 s), o timer
-   * dispara sozinho e envia um evento latency ao Datadog — garante que nenhuma
-   * medição fique em aberto independente do que aconteça com o componente.
+   * Após LATENCY_THRESHOLD_MS (5 s), se logViewReady() não for chamado,
+   * o serviço envia automaticamente um evento `timer_lost` ao Datadog —
+   * indicando que os dados nunca chegaram dentro do período esperado.
    *
+   * Escala: múltiplas telas podem ter timers ativos ao mesmo tempo; cada uma
+   * tem sua própria entrada nos Maps `timers` e `timeoutIds`.
    * Se startTimer() for chamado novamente para a mesma tela (re-navegação),
-   * o timeout anterior é cancelado e um novo é criado.
+   * o timeout anterior é cancelado e um novo ciclo começa.
    */
   startTimer(viewName: string): void {
-    // Cancela timeout anterior desta tela (re-navegação antes de expirar)
-    const existingTimeout = this.timeoutIds.get(viewName);
-    if (existingTimeout !== undefined) {
-      clearTimeout(existingTimeout);
+    // Re-navegação: cancela o timeout anterior desta tela antes de iniciar um novo
+    const existing = this.timeoutIds.get(viewName);
+    if (existing !== undefined) {
+      clearTimeout(existing);
+      this.timeoutIds.delete(viewName);
     }
 
     const start = performance.now();
@@ -37,10 +50,7 @@ export class ObservabilityService {
 
     const id = window.setTimeout(() => {
       this.timeoutIds.delete(viewName);
-      console.warn(
-        `[DD] ⏰ timeout automático: ${viewName} — não finalizou em ${LATENCY_THRESHOLD_MS} ms`
-      );
-      this.logViewReady(viewName);
+      this._fireTimerLost(viewName);
     }, LATENCY_THRESHOLD_MS);
 
     this.timeoutIds.set(viewName, id);
@@ -48,20 +58,25 @@ export class ObservabilityService {
   }
 
   /**
-   * Encerra a medição e envia o evento de latência.
+   * Encerra o timer e envia o evento de latência.
    *
-   * Chamado em dois cenários:
-   *  1. Dados chegaram (caminho normal) → chamado pelo tap() do observable.
-   *  2. Componente destruído antes dos dados → chamado pelo ngOnDestroy().
+   * Deve ser chamado quando os dados chegaram e a tela está visível:
+   *  - Caminho normal: tap() no primeiro valor não-nulo do observable.
+   *  - Fallback de segurança: ngOnDestroy(), caso os dados cheguem após a
+   *    destruição do componente ou nunca cheguem.
    *
-   * O timeout automático de startTimer() é cancelado aqui quando o encerramento
-   * ocorre antes dos 5 s — impede double-log.
+   * Se o timer já foi encerrado (pelo auto-timeout ou por uma chamada anterior),
+   * retorna silenciosamente — sem double-log.
    *
-   * Retorno silencioso se o timer não existir (já expirou automaticamente
-   * ou ngOnDestroy chamou depois do tap()).
+   * Envia:
+   *  - `render_complete` (info)  se duration_ms ≤ 5 000 ms — tela dentro do SLA
+   *  - `latency`         (warning) se duration_ms > 5 000 ms — tela lenta mas finalizou
+   *
+   * Para o caso em que os dados nunca chegam, use o auto-timeout de startTimer()
+   * que envia `timer_lost`.
    */
   logViewReady(viewName: string): void {
-    // Cancela o timeout automático se ainda não disparou
+    // Cancela o auto-timeout: o encerramento aconteceu antes dos 5 s (ou no destroy)
     const timeoutId = this.timeoutIds.get(viewName);
     if (timeoutId !== undefined) {
       clearTimeout(timeoutId);
@@ -70,7 +85,7 @@ export class ObservabilityService {
 
     const start = this.timers.get(viewName);
     if (start === undefined) {
-      // Timer já foi encerrado (timeout automático, tap() ou ngOnDestroy anterior)
+      // Timer já foi encerrado pelo auto-timeout ou por chamada anterior — sem ação
       return;
     }
 
@@ -113,5 +128,30 @@ export class ObservabilityService {
         ? 'warn'
         : 'info';
     window.DD_LOGS.logger.log(payload.event_type, { ...payload }, level);
+  }
+
+  /**
+   * Disparado pelo setTimeout de startTimer() quando os dados não chegaram
+   * em LATENCY_THRESHOLD_MS. Envia `timer_lost` — distinto de `latency`
+   * (render lento que finalizou) porque neste caso os dados nunca chegaram.
+   */
+  private _fireTimerLost(viewName: string): void {
+    const start = this.timers.get(viewName);
+    if (start === undefined) return; // logViewReady() foi chamado no mesmo tick
+
+    this.timers.delete(viewName);
+    const duration_ms = Math.round(performance.now() - start);
+
+    console.error(
+      `[DD] ❌ timer perdido: ${viewName} — dados não chegaram em ${duration_ms} ms`
+    );
+
+    this.log({
+      event_type: 'timer_lost',
+      severity: 'error',
+      view_name: viewName,
+      duration_ms,
+      threshold_exceeded: true,
+    });
   }
 }
