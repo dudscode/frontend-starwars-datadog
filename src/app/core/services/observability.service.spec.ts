@@ -148,7 +148,7 @@ describe('ObservabilityService', () => {
       jest.spyOn(performance, 'now').mockReturnValueOnce(0).mockReturnValueOnce(5001);
       service.startTimer('characters');
 
-      jest.advanceTimersByTime(5000);
+      jest.advanceTimersByTime(60000);
 
       expect(window.DD_LOGS!.logger.log).toHaveBeenCalledWith(
         'timer_lost',
@@ -178,7 +178,7 @@ describe('ObservabilityService', () => {
       jest.spyOn(performance, 'now').mockReturnValueOnce(0).mockReturnValueOnce(300);
       service.startTimer('characters');
       service.logViewReady('characters');
-      jest.advanceTimersByTime(5000);
+      jest.advanceTimersByTime(60000);
       expect((window.DD_LOGS!.logger.log as jest.Mock).mock.calls.length).toBe(1);
       expect(window.DD_LOGS!.logger.log).toHaveBeenCalledWith('render_complete', expect.anything(), 'info');
     });
@@ -187,13 +187,13 @@ describe('ObservabilityService', () => {
       jest.spyOn(performance, 'now').mockReturnValue(0);
       service.startTimer('characters');
 
-      jest.advanceTimersByTime(3000);
-      service.startTimer('characters'); // re-navegação — reseta o ciclo
+      jest.advanceTimersByTime(30000); // 30 s — timer original ainda não expirou
+      service.startTimer('characters'); // re-navegação — cancela o anterior, novo ciclo de 60 s
 
-      jest.advanceTimersByTime(3000); // 3s do novo timer
+      jest.advanceTimersByTime(30000); // 30 s do novo timer — ainda não expirou
       expect(window.DD_LOGS!.logger.log).not.toHaveBeenCalled();
 
-      jest.advanceTimersByTime(2000); // completa 5s do novo timer
+      jest.advanceTimersByTime(30001); // completa 60 s do novo timer
       expect(window.DD_LOGS!.logger.log).toHaveBeenCalledTimes(1);
       expect(window.DD_LOGS!.logger.log).toHaveBeenCalledWith('timer_lost', expect.anything(), 'error');
     });
@@ -202,7 +202,7 @@ describe('ObservabilityService', () => {
       jest.spyOn(performance, 'now').mockReturnValue(0);
       service.startTimer('characters');
 
-      jest.advanceTimersByTime(5000); // timer_lost dispara
+      jest.advanceTimersByTime(60000); // timer_lost dispara
       expect((window.DD_LOGS!.logger.log as jest.Mock).mock.calls.length).toBe(1);
 
       service.logViewReady('characters'); // ngOnDestroy chama depois
@@ -226,7 +226,7 @@ describe('ObservabilityService', () => {
       service.startTimer('characters');
       service.startTimer('films');
 
-      jest.advanceTimersByTime(5000);
+      jest.advanceTimersByTime(60000);
 
       const calls = (window.DD_LOGS!.logger.log as jest.Mock).mock.calls;
       expect(calls.length).toBe(2);

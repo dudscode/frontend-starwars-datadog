@@ -2,22 +2,32 @@ import { Injectable } from '@angular/core';
 import { environment } from '../../../environments/environment';
 import { LogPayload } from '../types/dd-logs.types';
 
-const LATENCY_THRESHOLD_MS = 5000;
+/** Threshold para distinguir render lento (latency) de render normal (render_complete). */
+const LATENCY_THRESHOLD_MS = 5_000; // 5 s
+
+/**
+ * Se logViewReady() não for chamado neste prazo, o timer é considerado perdido
+ * e um evento `timer_lost` é enviado automaticamente ao Datadog.
+ */
+const TIMER_LOST_TIMEOUT_MS = 60_000; // 1 min
 
 @Injectable({ providedIn: 'root' })
 export class ObservabilityService {
   /**
-   * Armazena o timestamp de início de cada timer ativo, indexado por viewName.
-   * Múltiplos timers podem existir em simultâneo (ex: navegação rápida entre telas).
+   * Timestamp de início de cada timer ativo, indexado por viewName.
+   * Múltiplos timers podem existir em simultâneo — cada tela tem sua própria entrada.
    */
   private timers = new Map<string, number>();
 
   /**
-   * Armazena o ID do setTimeout de cada timer ativo, indexado por viewName.
-   * Necessário para cancelar o timeout quando logViewReady() for chamado antes
-   * dos 5 s — evita que o auto-fire dispare depois que o timer já foi encerrado.
+   * ID do setTimeout de cada timer ativo, indexado por viewName.
+   * Usado para cancelar o auto-timeout quando logViewReady() encerrar
+   * o timer normalmente antes do prazo de 1 min.
+   *
+   * Tipado como ReturnType<typeof setTimeout> para compatibilidade com @types/node
+   * (que sobrescreve setTimeout para retornar NodeJS.Timeout em vez de number).
    */
-  private timeoutIds = new Map<string, ReturnType<typeof window.setTimeout>>();
+  private timeoutIds = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor() {
     if (!window.DD_LOGS) return;
@@ -28,17 +38,15 @@ export class ObservabilityService {
   /**
    * Inicia um timer de renderização para a tela indicada.
    *
-   * Após LATENCY_THRESHOLD_MS (5 s), se logViewReady() não for chamado,
-   * o serviço envia automaticamente um evento `timer_lost` ao Datadog —
-   * indicando que os dados nunca chegaram dentro do período esperado.
+   * Após TIMER_LOST_TIMEOUT_MS (1 min), se logViewReady() não for chamado,
+   * o serviço envia automaticamente um evento `timer_lost` ao Datadog.
    *
    * Escala: múltiplas telas podem ter timers ativos ao mesmo tempo; cada uma
    * tem sua própria entrada nos Maps `timers` e `timeoutIds`.
-   * Se startTimer() for chamado novamente para a mesma tela (re-navegação),
-   * o timeout anterior é cancelado e um novo ciclo começa.
+   * Re-navegação para a mesma tela (startTimer chamado 2x) cancela o timeout
+   * anterior e inicia um novo ciclo.
    */
   startTimer(viewName: string): void {
-    // Re-navegação: cancela o timeout anterior desta tela antes de iniciar um novo
     const existing = this.timeoutIds.get(viewName);
     if (existing !== undefined) {
       clearTimeout(existing);
@@ -48,10 +56,10 @@ export class ObservabilityService {
     const start = performance.now();
     this.timers.set(viewName, start);
 
-    const id = window.setTimeout(() => {
+    const id = setTimeout(() => {
       this.timeoutIds.delete(viewName);
       this._fireTimerLost(viewName);
-    }, LATENCY_THRESHOLD_MS);
+    }, TIMER_LOST_TIMEOUT_MS);
 
     this.timeoutIds.set(viewName, id);
     console.log(`[DD] ⏱ timer iniciado: ${viewName}`);
@@ -60,23 +68,20 @@ export class ObservabilityService {
   /**
    * Encerra o timer e envia o evento de latência.
    *
-   * Deve ser chamado quando os dados chegaram e a tela está visível:
-   *  - Caminho normal: tap() no primeiro valor não-nulo do observable.
-   *  - Fallback de segurança: ngOnDestroy(), caso os dados cheguem após a
-   *    destruição do componente ou nunca cheguem.
-   *
-   * Se o timer já foi encerrado (pelo auto-timeout ou por uma chamada anterior),
-   * retorna silenciosamente — sem double-log.
+   * Chamado em dois cenários:
+   *  1. Dados chegaram (caminho normal) → tap() no observable.
+   *  2. Componente destruído antes dos dados → ngOnDestroy().
    *
    * Envia:
-   *  - `render_complete` (info)  se duration_ms ≤ 5 000 ms — tela dentro do SLA
-   *  - `latency`         (warning) se duration_ms > 5 000 ms — tela lenta mas finalizou
+   *  - render_complete (info)    se duration_ms ≤ LATENCY_THRESHOLD_MS (5 s)
+   *  - latency         (warning) se duration_ms >  LATENCY_THRESHOLD_MS (5 s)
    *
-   * Para o caso em que os dados nunca chegam, use o auto-timeout de startTimer()
-   * que envia `timer_lost`.
+   * Para o caso em que os dados nunca chegam em 1 min, o auto-timeout
+   * de startTimer() envia `timer_lost` (event distinto de `latency`).
+   *
+   * Retorno silencioso se o timer já foi encerrado.
    */
   logViewReady(viewName: string): void {
-    // Cancela o auto-timeout: o encerramento aconteceu antes dos 5 s (ou no destroy)
     const timeoutId = this.timeoutIds.get(viewName);
     if (timeoutId !== undefined) {
       clearTimeout(timeoutId);
@@ -84,10 +89,7 @@ export class ObservabilityService {
     }
 
     const start = this.timers.get(viewName);
-    if (start === undefined) {
-      // Timer já foi encerrado pelo auto-timeout ou por chamada anterior — sem ação
-      return;
-    }
+    if (start === undefined) return;
 
     this.timers.delete(viewName);
     const duration_ms = Math.round(performance.now() - start);
@@ -131,13 +133,13 @@ export class ObservabilityService {
   }
 
   /**
-   * Disparado pelo setTimeout de startTimer() quando os dados não chegaram
-   * em LATENCY_THRESHOLD_MS. Envia `timer_lost` — distinto de `latency`
-   * (render lento que finalizou) porque neste caso os dados nunca chegaram.
+   * Disparado pelo setTimeout de startTimer() após TIMER_LOST_TIMEOUT_MS (1 min).
+   * Envia `timer_lost` — distinto de `latency` porque os dados nunca chegaram,
+   * independentemente da duração.
    */
   private _fireTimerLost(viewName: string): void {
     const start = this.timers.get(viewName);
-    if (start === undefined) return; // logViewReady() foi chamado no mesmo tick
+    if (start === undefined) return;
 
     this.timers.delete(viewName);
     const duration_ms = Math.round(performance.now() - start);
