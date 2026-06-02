@@ -129,12 +129,10 @@ describe('ObservabilityService', () => {
       );
     });
 
-    it('should not log and emit console.warn when logViewReady called without startTimer', () => {
+    it('should return silently when logViewReady called without startTimer (no double-log from ngOnDestroy)', () => {
       service.logViewReady('unknown-view');
       expect(window.DD_LOGS!.logger.log).not.toHaveBeenCalled();
-      expect(console.warn).toHaveBeenCalledWith(
-        expect.stringContaining('unknown-view')
-      );
+      expect(console.warn).not.toHaveBeenCalled();
     });
 
     it('should clear the timer after logViewReady so a second call does nothing', () => {

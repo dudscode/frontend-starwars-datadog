@@ -1,12 +1,14 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
+  OnDestroy,
   OnInit,
   inject,
   signal,
 } from '@angular/core';
 import { AsyncPipe, NgFor, NgIf } from '@angular/common';
-import { toObservable } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { PageEvent } from '@angular/material/paginator';
 import { MatListModule } from '@angular/material/list';
 import { MatPaginatorModule } from '@angular/material/paginator';
@@ -51,9 +53,10 @@ const PAGE_SIZE = 10;
   templateUrl: './characters.component.html',
   styleUrl: './characters.component.scss',
 })
-export class CharactersComponent implements OnInit {
+export class CharactersComponent implements OnInit, OnDestroy {
   private obs = inject(ObservabilityService);
   private swapiService = inject(SwapiService);
+  private destroyRef = inject(DestroyRef);
 
   readonly pageSize = PAGE_SIZE;
   currentPage = signal(0);
@@ -96,14 +99,24 @@ export class CharactersComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    // Encerra a medição quando os dados chegam e a tela está pronta para exibir.
+    // Encerra a medição quando os dados chegam (caminho normal).
+    // takeUntilDestroyed cancela a subscription se o componente for destruído
+    // antes dos dados chegarem — evita subscription órfã.
     this.pageView$
       .pipe(
         filter((v): v is CharactersPageView => v !== null),
         take(1),
-        tap(() => this.obs.logViewReady('characters'))
+        tap(() => this.obs.logViewReady('characters')),
+        takeUntilDestroyed(this.destroyRef)
       )
       .subscribe();
+  }
+
+  ngOnDestroy(): void {
+    // Garante que o timer seja encerrado mesmo que os dados nunca tenham chegado
+    // (usuário saiu antes, erro de rede, timeout). Se logViewReady já foi chamado
+    // pelo tap() acima, esta chamada retorna silenciosamente.
+    this.obs.logViewReady('characters');
   }
 
   onPageChange(event: PageEvent): void {

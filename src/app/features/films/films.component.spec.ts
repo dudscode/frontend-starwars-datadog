@@ -111,8 +111,14 @@ describe('FilmsComponent', () => {
       expect(obsMock.logViewReady).toHaveBeenCalledWith('films');
     }));
 
-    it('should implement OnInit interface', () => {
+    it('should call logViewReady("films") in ngOnDestroy to close open timers', () => {
+      fixture.destroy();
+      expect(obsMock.logViewReady).toHaveBeenCalledWith('films');
+    });
+
+    it('should implement OnInit and OnDestroy interfaces', () => {
       expect(typeof component.ngOnInit).toBe('function');
+      expect(typeof component.ngOnDestroy).toBe('function');
     });
   });
 });

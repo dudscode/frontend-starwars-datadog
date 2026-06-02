@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnDestroy, OnInit, inject } from '@angular/core';
 import { AsyncPipe, NgFor, NgIf } from '@angular/common';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatButtonModule } from '@angular/material/button';
@@ -33,9 +34,10 @@ import { FilmDisplayItem, toFilmDisplayItem } from '../../models/film.model';
   templateUrl: './films.component.html',
   styleUrl: './films.component.scss',
 })
-export class FilmsComponent implements OnInit {
+export class FilmsComponent implements OnInit, OnDestroy {
   private obs = inject(ObservabilityService);
   private swapiService = inject(SwapiService);
+  private destroyRef = inject(DestroyRef);
 
   films$: Observable<FilmDisplayItem[] | null> = this.swapiService.getFilms().pipe(
     map((films) => films.map(toFilmDisplayItem)),
@@ -63,14 +65,24 @@ export class FilmsComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    // Encerra a medição quando os filmes chegam e a tela está pronta.
+    // Encerra a medição quando os dados chegam (caminho normal).
+    // takeUntilDestroyed cancela a subscription se o componente for destruído
+    // antes dos dados chegarem — evita subscription órfã.
     this.films$
       .pipe(
         filter((v): v is FilmDisplayItem[] => v !== null),
         take(1),
-        tap(() => this.obs.logViewReady('films'))
+        tap(() => this.obs.logViewReady('films')),
+        takeUntilDestroyed(this.destroyRef)
       )
       .subscribe();
+  }
+
+  ngOnDestroy(): void {
+    // Garante que o timer seja encerrado mesmo que os dados nunca tenham chegado
+    // (usuário saiu antes, erro de rede, timeout). Se logViewReady já foi chamado
+    // pelo tap() acima, esta chamada retorna silenciosamente.
+    this.obs.logViewReady('films');
   }
 
   retry(): void {

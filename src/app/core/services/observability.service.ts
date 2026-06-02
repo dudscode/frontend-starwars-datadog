@@ -27,13 +27,21 @@ export class ObservabilityService {
 
   /**
    * Encerra a medição e envia o evento de latência.
-   * Chame quando a tela estiver completamente renderizada com dados visíveis —
-   * ex: tap no primeiro valor não-nulo do observable de dados.
+   *
+   * Deve ser chamado em dois cenários:
+   *  1. Dados chegaram → chamado no tap() do observable (caminho normal)
+   *  2. Componente destruído antes dos dados → chamado no ngOnDestroy()
+   *     para garantir que o timer não fique aberto no Map.
+   *
+   * Se o timer já foi encerrado pelo caminho normal (ngOnDestroy chama
+   * depois que tap() já chamou), o método retorna silenciosamente — sem
+   * double-log, sem warning.
    */
   logViewReady(viewName: string): void {
     const start = this.timers.get(viewName);
     if (start === undefined) {
-      console.warn(`[DD] logViewReady chamado sem startTimer para: ${viewName}`);
+      // Timer já foi encerrado (caminho normal) ou startTimer nunca foi chamado.
+      // Retorno silencioso — não é um erro, é o comportamento esperado no ngOnDestroy.
       return;
     }
 
